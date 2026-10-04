@@ -182,6 +182,29 @@ function createLocationPopup(location) {
   return popup;
 }
 
+function getLocationCategoryIcon(category) {
+  const normalizedCategory = String(category || "").trim().toLocaleLowerCase("ro");
+  if (normalizedCategory.includes("restaurant")) {
+    return '<g class="location-map-pin-category" transform="translate(0 5)" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M16 14v9M16 14V7M13 7v5a3 3 0 0 0 6 0V7M24 7v16M24 7c3 2 3 7 0 9"/></g>';
+  }
+  if (normalizedCategory.includes("bar") || normalizedCategory.includes("pub")) {
+    return '<g class="location-map-pin-category" transform="translate(0 3)" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12 8h16l-6 8v7h-4v-7zM20 23v3M15 26h10"/><path d="M20 8v4"/></g>';
+  }
+  if (normalizedCategory.includes("cafenea") || normalizedCategory.includes("cafe")) {
+    return '<g class="location-map-pin-category" transform="translate(0 5)" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M13 11h13v8a5 5 0 0 1-5 5h-3a5 5 0 0 1-5-5zM26 13h2a3 3 0 0 1 0 6h-2M17 7c-2-2 2-2 0-4M22 7c-2-2 2-2 0-4"/></g>';
+  }
+  if (normalizedCategory.includes("club") || normalizedCategory.includes("muz")) {
+    return '<g class="location-map-pin-category" transform="translate(-6 5)" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M22 7v14.5a3.5 3.5 0 1 1-2-3.16V11l9-2v10.5a3.5 3.5 0 1 1-2-3.16V7z"/></g>';
+  }
+  if (normalizedCategory.includes("outdoor") || normalizedCategory.includes("parc")) {
+    return '<g class="location-map-pin-category" transform="translate(0 3)" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m20 6 9 10h-6l6 7H11l6-7h-6zM20 23v4"/></g>';
+  }
+  if (normalizedCategory.includes("cultur") || normalizedCategory.includes("teatru") || normalizedCategory.includes("muze")) {
+    return '<g class="location-map-pin-category" transform="translate(0 4)" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12 12c0-3 4-5 8-5s8 2 8 5-4 5-8 5-8-2-8-5zM12 12v8c0 3 4 5 8 5s8-2 8-5v-8M16 12h.01M24 12h.01M18 22l2-2 2 2"/></g>';
+  }
+  return '<g class="location-map-pin-category location-map-pin-category-default" transform="translate(0 3)" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="20" cy="17" r="7"/><path d="m20 10 1.5 5.5L27 17l-5.5 1.5L20 24l-1.5-5.5L13 17l5.5-1.5z"/></g>';
+}
+
 function setMapLocations(locations) {
   locationLayer.clearLayers();
   const validLocations = locations.filter((location) =>
@@ -194,9 +217,17 @@ function setMapLocations(locations) {
   );
 
   for (const location of validLocations) {
-    const marker = L.circleMarker(
+    const locationIcon = L.divIcon({
+      className: "location-map-pin",
+      html: `<svg aria-hidden="true" viewBox="0 0 40 52" focusable="false"><path class="location-map-pin-shape" d="M20 1C9.5 1 1 9.5 1 20c0 12.2 15.8 29.5 18.1 31.5a1.35 1.35 0 0 0 1.8 0C23.2 49.5 39 32.2 39 20 39 9.5 30.5 1 20 1Z"/>${getLocationCategoryIcon(location.category)}</svg>`,
+      iconSize: [40, 52],
+      iconAnchor: [20, 51],
+      popupAnchor: [0, -48],
+      tooltipAnchor: [0, -45],
+    });
+    const marker = L.marker(
       [Number(location.latitude), Number(location.longitude)],
-      { radius: 7, className: "location-map-marker", fillColor: "#5cc9dc", fillOpacity: 0.92, color: "#10202b", weight: 2.5 },
+      { icon: locationIcon, title: `${location.name} · ${location.category}`, alt: `${location.name}, ${location.city}, ${location.category}` },
     );
     marker.bindPopup(() => createLocationPopup(location));
     marker.bindTooltip(location.name, { direction: "top", offset: [0, -7], sticky: true });
