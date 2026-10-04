@@ -23,6 +23,8 @@ Dacă Windows blochează rularea scripturilor, pornește serverul explicit:
 powershell -ExecutionPolicy Bypass -File .\server.ps1
 ```
 
+Fiecare coleg trebuie să pornească propriul backend local după ce descarcă sau actualizează codul. Verifică `http://localhost:5101/health`; răspunsul trebuie să fie `{"status":"ok"}`. Dacă ruta nu pornește, verifică mesajul afișat în aplicație și confirmă că backendul rulează pe portul `5101` și că există conexiune la internet pentru serviciul OSRM.
+
 ## Lucrul în echipă
 
 Instrucțiunile pentru împărțirea muncii, ramuri Git și verificarea modificărilor sunt în [CONTRIBUTING.md](./CONTRIBUTING.md). Pentru a rula verificarea API-ului local, cu PowerShell deschis în folderul proiectului, execută:

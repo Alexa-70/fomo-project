@@ -85,7 +85,8 @@ try {
   if ($appScript -notmatch "function getApiBaseUrl\(\)" -or
     $appScript -notmatch 'window\.location\.protocol === "file:"' -or
     $appScript -notmatch 'window\.location\.port !== "5101"' -or
-    $appScript -notmatch 'fetch\(`\$\{API_BASE_URL\}\$\{path\}`, options\)') {
+    $appScript -notmatch 'fetch\(apiUrl, options\)' -or
+    -not $appScript.Contains("backendul FOMO")) {
     throw "Cererile API trebuie să folosească backendul local din Live Server și aceeași origine din aplicația găzduită."
   }
   $assistantScript = Get-Content -LiteralPath (Join-Path $projectRoot "ai-assistant.js") -Raw -Encoding UTF8
