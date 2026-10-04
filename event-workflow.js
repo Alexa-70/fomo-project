@@ -1,61 +1,8 @@
 (function () {
-  const STORAGE_KEY = "fomo-event-submissions-v1";
-  const USER_KEY = "fomo-event-submitter-v1";
+  const api = window.FomoFirebase;
   const nav = document.querySelector(".panel-tabs");
   const panelContent = document.querySelector("#panel-content");
-  const state = {
-    events: [],
-    userId: getOrCreateUserId(),
-    storageAvailable: true,
-  };
-
-  function getOrCreateUserId() {
-    try {
-      let id = localStorage.getItem(USER_KEY);
-      if (!id) {
-        id = typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `user-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        localStorage.setItem(USER_KEY, id);
-      }
-      return id;
-    } catch (error) {
-      console.error("Could not access browser storage for event submissions.", error);
-      return `temporary-${Date.now()}`;
-    }
-  }
-
-  function loadEvents() {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) return [];
-      const parsed = JSON.parse(saved);
-      if (!Array.isArray(parsed)) throw new Error("Stored event submissions are not a list.");
-      return parsed.filter((event) =>
-        event &&
-        typeof event.id === "string" &&
-        typeof event.title === "string" &&
-        ["pending", "approved", "rejected"].includes(event.status)
-      );
-    } catch (error) {
-      state.storageAvailable = false;
-      console.error("Could not load event submissions.", error);
-      return [];
-    }
-  }
-
-  function saveEvents() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events));
-      state.storageAvailable = true;
-      return true;
-    } catch (error) {
-      state.storageAvailable = false;
-      console.error("Could not save event submissions.", error);
-      setStatus("Nu am putut salva evenimentul în browser. Verifică spațiul disponibil și setările de stocare.", "error");
-      return false;
-    }
-  }
+  const state = { events: [], locations: [], user: null };
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -64,13 +11,14 @@
     return node;
   }
 
-  function makeField(labelText, input, id) {
+  function makeField(form, labelText, control, id) {
     const wrapper = element("div", "workflow-field");
     const label = element("label", "", labelText);
     label.htmlFor = id;
-    input.id = id;
-    wrapper.append(label, input);
-    return wrapper;
+    control.id = id;
+    wrapper.append(label, control);
+    form.append(wrapper);
+    return control;
   }
 
   function buildInterface() {
@@ -87,9 +35,8 @@
     const notice = element(
       "p",
       "workflow-notice",
-      "Prototip local: propunerile și aprobările se salvează doar în acest browser. Identitatea localului nu este verificată; folosește această interfață doar pentru demonstrație."
+      "Evenimentele sunt salvate online. O propunere devine publică numai după aprobarea ownerului locației sau a unui administrator."
     );
-
     const switcher = element("div", "workflow-switch");
     switcher.setAttribute("role", "tablist");
     const proposeButton = element("button", "active", "Propune un eveniment");
@@ -97,7 +44,7 @@
     proposeButton.setAttribute("role", "tab");
     proposeButton.setAttribute("aria-selected", "true");
     proposeButton.dataset.workflowTab = "propose";
-    const reviewButton = element("button", "", "Pentru localuri");
+    const reviewButton = element("button", "", "Pentru owneri");
     reviewButton.type = "button";
     reviewButton.setAttribute("role", "tab");
     reviewButton.setAttribute("aria-selected", "false");
@@ -111,18 +58,17 @@
     proposeHeading.append(
       element("p", "eyebrow", "Comunitatea"),
       element("h2", "", "Propune un eveniment"),
-      element("p", "", "Trimite planul tău. Acesta va apărea în lista publică după ce un reprezentant al localului îl aprobă.")
+      element("p", "", "Autentifică-te și confirmă emailul. Alege locația exactă, apoi trimite detaliile pentru verificare.")
     );
 
     const form = element("form", "workflow-form");
-    form.noValidate = false;
     const title = document.createElement("input");
     title.type = "text";
     title.name = "title";
     title.required = true;
     title.maxLength = 80;
     title.placeholder = "ex. Seară de muzică live";
-    form.append(makeField("Numele evenimentului", title, "community-event-title"));
+    makeField(form, "Numele evenimentului", title, "community-event-title");
 
     const category = document.createElement("select");
     category.name = "category";
@@ -140,28 +86,30 @@
       option.value = value;
       category.append(option);
     });
-    form.append(makeField("Categorie", category, "community-event-category"));
+    makeField(form, "Categorie", category, "community-event-category");
 
     const description = document.createElement("textarea");
     description.name = "description";
     description.required = true;
     description.maxLength = 500;
     description.placeholder = "Spune pe scurt ce se întâmplă.";
-    form.append(makeField("Descriere", description, "community-event-description"));
+    makeField(form, "Descriere", description, "community-event-description");
 
-    const venue = document.createElement("input");
-    venue.type = "text";
-    venue.name = "venue";
-    venue.required = true;
-    venue.maxLength = 120;
-    venue.placeholder = "Numele localului și orașul";
-    form.append(makeField("Localul gazdă", venue, "community-event-venue"));
+    const location = document.createElement("select");
+    location.name = "locationId";
+    location.required = true;
+    const locationPrompt = element("option", "", "Încarcă locațiile...");
+    locationPrompt.value = "";
+    locationPrompt.disabled = true;
+    locationPrompt.selected = true;
+    location.append(locationPrompt);
+    makeField(form, "Locația evenimentului", location, "community-event-location");
 
     const startsAt = document.createElement("input");
     startsAt.type = "datetime-local";
     startsAt.name = "startsAt";
     startsAt.required = true;
-    form.append(makeField("Data și ora", startsAt, "community-event-starts-at"));
+    makeField(form, "Data și ora", startsAt, "community-event-starts-at");
 
     const submit = element("button", "workflow-submit", "Trimite spre aprobare");
     submit.type = "submit";
@@ -181,51 +129,32 @@
     reviewView.setAttribute("role", "tabpanel");
     const reviewHeading = element("div", "workflow-heading");
     reviewHeading.append(
-      element("p", "eyebrow", "Administrare local"),
+      element("p", "eyebrow", "Verificare locație"),
       element("h2", "", "Aprobă propunerile"),
-      element("p", "", "Verifică dacă localul și detaliile sunt corecte înainte de publicare.")
+      element("p", "", "Doar ownerul aprobat al locației sau un administrator poate decide dacă evenimentul este real.")
     );
-
-    const reviewer = document.createElement("input");
-    reviewer.type = "text";
-    reviewer.name = "reviewer";
-    reviewer.maxLength = 80;
-    reviewer.required = true;
-    reviewer.placeholder = "ex. Echipa / numele localului";
-    const reviewerPanel = element("div", "reviewer-panel");
-    reviewerPanel.append(makeField("Numele reprezentantului localului", reviewer, "community-event-reviewer"));
-
     const pendingCount = element("p", "workflow-count");
-    pendingCount.dataset.pendingCount = "true";
     const pendingList = element("div", "workflow-list");
     pendingList.dataset.list = "pending";
-    const approvedHeading = element("div", "workflow-heading");
-    approvedHeading.append(
-      element("p", "eyebrow", "Evenimente verificate"),
-      element("h2", "", "Aprobate de local")
-    );
-    const approvedList = element("div", "workflow-list");
-    approvedList.dataset.list = "approved";
-    reviewView.append(reviewHeading, reviewerPanel, pendingCount, pendingList, approvedHeading, approvedList);
+    reviewView.append(reviewHeading, pendingCount, pendingList);
 
     const status = element("p", "workflow-status");
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
-    status.dataset.status = "true";
-
     panel.append(notice, switcher, proposeView, reviewView, status);
-    const settingsPanel = panelContent.querySelector('[data-tab-panel="settings"]');
-    panelContent.insertBefore(panel, settingsPanel || panelContent.querySelector("#status-message"));
-
-    return { navButton, panel, form, ownList, pendingList, approvedList, pendingCount, status, reviewer, proposeButton, reviewButton };
+    panelContent.insertBefore(panel, panelContent.querySelector("#status-message"));
+    return {
+      navButton, panel, form, location, ownList, pendingList, pendingCount,
+      status, proposeButton, reviewButton, submit,
+    };
   }
 
+  const ui = buildInterface();
+
   function setStatus(message, stateName) {
-    const status = ui && ui.status;
-    if (!status) return;
-    status.textContent = message;
-    if (stateName) status.dataset.state = stateName;
-    else delete status.dataset.state;
+    ui.status.textContent = message;
+    if (stateName) ui.status.dataset.state = stateName;
+    else delete ui.status.dataset.state;
   }
 
   function activateTopTab(tabName) {
@@ -269,89 +198,164 @@
         : "În așteptare";
   }
 
-  function renderCard(event, showActions, showReviewer) {
+  function renderCard(event, showActions) {
     const card = element("article", "workflow-card");
     const top = element("div", "workflow-card-top");
     top.append(
       element("span", "event-category", event.category),
       element("span", `workflow-badge ${event.status}`, statusLabel(event.status))
     );
-    const title = element("h3", "", event.title);
-    const description = element("p", "workflow-description", event.description);
-    const details = element("p", "", `${event.venue} · ${formatDate(event.startsAt)}`);
-    card.append(top, title, description, details);
-    if (showReviewer && event.reviewedBy) {
-      card.append(element("p", "", `Verificat de: ${event.reviewedBy}`));
-    }
-
+    card.append(
+      top,
+      element("h3", "", event.title),
+      element("p", "workflow-description", event.description),
+      element("p", "", `${event.venue}, ${event.city} · ${formatDate(event.startsAt)}`),
+    );
     if (showActions) {
       const actions = element("div", "workflow-card-actions");
-      const approve = element("button", "approve", "Aprobă");
-      approve.type = "button";
-      approve.disabled = !ui.reviewer.value.trim();
-      approve.addEventListener("click", () => reviewEvent(event.id, "approved"));
-      const reject = element("button", "reject", "Respinge");
-      reject.type = "button";
-      reject.disabled = !ui.reviewer.value.trim();
-      reject.addEventListener("click", () => reviewEvent(event.id, "rejected"));
-      actions.append(reject, approve);
+      for (const [decision, label] of [["rejected", "Respinge"], ["approved", "Aprobă"]]) {
+        const button = element("button", decision === "approved" ? "approve" : "reject", label);
+        button.type = "button";
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          try {
+            await api.db.ref(`communityEvents/${event.id}`).update({
+              status: decision,
+              reviewedAt: firebase.database.ServerValue.TIMESTAMP,
+              reviewedBy: state.user.uid,
+            });
+            await loadData();
+            setStatus(decision === "approved" ? "Evenimentul a fost verificat și publicat." : "Propunerea a fost respinsă.", "success");
+          } catch (error) {
+            button.disabled = false;
+            setStatus(error.message, "error");
+          }
+        });
+        actions.append(button);
+      }
       card.append(actions);
     }
     return card;
   }
 
-  function renderList(container, list, emptyText, showActions, showReviewer) {
+  function renderList(container, list, emptyText, showActions) {
     container.replaceChildren();
     if (!list.length) {
       container.append(element("p", "workflow-empty", emptyText));
       return;
     }
-    list.forEach((event) => container.append(renderCard(event, showActions, showReviewer)));
+    list.forEach((event) => container.append(renderCard(event, showActions)));
   }
 
-  function render() {
-    const ownEvents = state.events
-      .filter((event) => event.submittedBy === state.userId)
-      .sort((left, right) => right.submittedAt.localeCompare(left.submittedAt));
-    const pending = state.events
-      .filter((event) => event.status === "pending")
-      .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt));
-    const approved = state.events
-      .filter((event) => event.status === "approved")
-      .sort((left, right) => new Date(left.startsAt) - new Date(right.startsAt));
+  function eventFromSnapshot(snapshot) {
+    return { id: snapshot.key, ...snapshot.val() };
+  }
 
-    renderList(ui.ownList, ownEvents, "Nu ai trimis încă nicio propunere.", false, true);
-    renderList(ui.pendingList, pending, "Nu sunt propuneri în așteptare.", true, false);
-    renderList(ui.approvedList, approved, "Evenimentele aprobate vor apărea aici.", false, true);
-    ui.pendingCount.textContent = `${pending.length} propuneri în așteptare`;
-    ui.panel.querySelectorAll(".workflow-card-actions button").forEach((button) => {
-      button.disabled = !ui.reviewer.value.trim();
+  function publishApprovedEvents(events) {
+    state.events = events.filter((event) => event.status === "approved");
+    if (typeof window.FomoRefreshCommunityEvents === "function") {
+      window.FomoRefreshCommunityEvents(state.events.map((event) => ({
+        id: `community-${event.id}`,
+        title: event.title,
+        category: event.category,
+        description: event.description,
+        venue: `${event.venue}, ${event.city}`,
+        locationId: event.locationId,
+        startsAt: event.startsAt,
+        latitude: Number(event.latitude),
+        longitude: Number(event.longitude),
+        tier: "free",
+        votes: 0,
+        votedByMe: false,
+        source: "community",
+      })));
+    }
+  }
+
+  async function loadData() {
+    if (!api.configured) {
+      setStatus("Configurează Firebase pentru a activa propunerile și moderarea online.", "error");
+      return;
+    }
+    const [approvedSnapshot, locations] = await Promise.all([
+      api.db.ref("communityEvents").orderByChild("status").equalTo("approved").once("value"),
+      api.locations(),
+    ]);
+    const approved = [];
+    approvedSnapshot.forEach((child) => approved.push(eventFromSnapshot(child)));
+    publishApprovedEvents(approved);
+    state.locations = locations;
+    if (typeof window.FomoSetLocations === "function") {
+      window.FomoSetLocations(state.locations);
+    }
+    const currentLocation = ui.location.value;
+    ui.location.replaceChildren();
+    const prompt = element("option", "", "Alege orașul și locația");
+    prompt.value = "";
+    prompt.disabled = true;
+    prompt.selected = true;
+    ui.location.append(prompt);
+    state.locations.forEach((location) => {
+      const option = element("option", "", `${location.city} — ${location.name}`);
+      option.value = location.id;
+      ui.location.append(option);
     });
-  }
+    if (state.locations.some((location) => location.id === currentLocation)) ui.location.value = currentLocation;
 
-  function reviewEvent(id, status) {
-    const reviewerName = ui.reviewer.value.trim();
-    if (!reviewerName) {
-      setStatus("Introdu numele reprezentantului localului înainte de a modera.", "error");
-      ui.reviewer.focus();
+    state.user = api.user();
+    if (!state.user) {
+      renderList(ui.ownList, [], "Autentifică-te pentru a vedea propunerile tale.", false);
+      renderList(ui.pendingList, [], "Autentifică-te ca owner aprobat pentru a vedea propunerile locației tale.", false);
+      ui.pendingCount.textContent = "Autentificarea este necesară pentru moderare.";
       return;
     }
-    const event = state.events.find((item) => item.id === id && item.status === "pending");
-    if (!event) {
-      setStatus("Propunerea nu mai este în așteptare. Reîncarcă lista.", "error");
-      render();
+
+    const ownSnapshot = await api.db.ref("communityEvents")
+      .orderByChild("submittedBy")
+      .equalTo(state.user.uid)
+      .once("value");
+    const ownEvents = [];
+    ownSnapshot.forEach((child) => ownEvents.push(eventFromSnapshot(child)));
+    ownEvents
+      .sort((left, right) => String(right.submittedAt || "").localeCompare(String(left.submittedAt || "")));
+    renderList(ui.ownList, ownEvents, "Nu ai trimis încă nicio propunere.", false);
+
+    if (!state.user.emailVerified) {
+      renderList(ui.pendingList, [], "Confirmă emailul pentru a modera propuneri.", false);
+      ui.pendingCount.textContent = "Confirmarea adresei este necesară pentru moderare.";
       return;
     }
-    event.status = status;
-    event.reviewedBy = reviewerName;
-    event.reviewedAt = new Date().toISOString();
-    if (!saveEvents()) return;
-    render();
-    setStatus(status === "approved" ? "Evenimentul a fost aprobat și este vizibil în listă." : "Propunerea a fost respinsă.", "success");
-  }
 
-  const ui = buildInterface();
-  state.events = loadEvents();
+    try {
+      const [admin, ...ownedLocations] = await Promise.all([
+        api.db.ref(`admins/${state.user.uid}`).once("value"),
+        ...state.locations
+          .filter((location) => location.ownerUid === state.user.uid)
+          .map((location) => api.db.ref("communityEvents")
+            .orderByChild("locationId")
+            .equalTo(location.id)
+            .once("value")),
+      ]);
+      const pendingSnapshots = admin.val() === true
+        ? [await api.db.ref("communityEvents").once("value")]
+        : ownedLocations;
+      const pendingEvents = new Map();
+      pendingSnapshots.forEach((snapshot) => snapshot.forEach((child) => {
+        const event = eventFromSnapshot(child);
+        if (event.status === "pending") pendingEvents.set(event.id, event);
+      }));
+      renderList(
+        ui.pendingList,
+        [...pendingEvents.values()],
+        "Nu există propuneri în așteptare pentru locațiile tale.",
+        pendingEvents.size > 0,
+      );
+      ui.pendingCount.textContent = `${pendingEvents.size} propuneri în așteptare`;
+    } catch (error) {
+      console.error("Could not load the owner moderation queue.", error);
+      setStatus(error.message, "error");
+    }
+  }
 
   ui.navButton.addEventListener("click", () => activateTopTab("community-events"));
   document.querySelectorAll(".panel-tabs .tab-button").forEach((button) => {
@@ -360,47 +364,72 @@
   });
   ui.proposeButton.addEventListener("click", () => activateWorkflowView("propose"));
   ui.reviewButton.addEventListener("click", () => activateWorkflowView("review"));
-  ui.reviewer.addEventListener("input", render);
-
-  ui.form.addEventListener("submit", (submitEvent) => {
-    submitEvent.preventDefault();
+  ui.form.addEventListener("submit", async (event) => {
+    event.preventDefault();
     if (!ui.form.reportValidity()) return;
-
-    const formData = new FormData(ui.form);
-    const title = String(formData.get("title")).trim();
-    const description = String(formData.get("description")).trim();
-    const venue = String(formData.get("venue")).trim();
-    const startsAt = new Date(String(formData.get("startsAt")));
-    if (!title || !description || !venue || Number.isNaN(startsAt.getTime())) {
-      setStatus("Completează toate câmpurile cu informații valide.", "error");
+    const user = api.configured ? api.user() : null;
+    if (!user) {
+      setStatus("Autentifică-te în meniul Cont pentru a trimite un eveniment.", "error");
+      return;
+    }
+    if (!user.emailVerified) {
+      setStatus("Confirmă adresa de email înainte să trimiți un eveniment.", "error");
       return;
     }
 
-    const event = {
-      id: typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `event-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      title,
-      category: String(formData.get("category")),
-      description,
-      venue,
-      startsAt: startsAt.toISOString(),
-      status: "pending",
-      submittedBy: state.userId,
-      submittedAt: new Date().toISOString(),
-    };
-    state.events.push(event);
-    if (!saveEvents()) {
-      state.events.pop();
+    const values = new FormData(ui.form);
+    const startsAt = new Date(String(values.get("startsAt")));
+    if (Number.isNaN(startsAt.getTime()) || startsAt.getTime() <= Date.now()) {
+      setStatus("Alege o dată validă, aflată în viitor.", "error");
       return;
     }
-    ui.form.reset();
-    render();
-    setStatus("Propunerea a fost trimisă. Va fi publicată după aprobarea localului.", "success");
+    ui.submit.disabled = true;
+    try {
+      const location = state.locations.find((item) => item.id === String(values.get("locationId")));
+      if (!location) throw new Error("Alege o locație validă.");
+      const eventData = {
+        title: String(values.get("title")).trim(),
+        category: String(values.get("category")),
+        description: String(values.get("description")).trim(),
+        locationId: location.id,
+        venue: location.name,
+        city: location.city,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        status: "pending",
+        submittedBy: user.uid,
+        submittedByEmail: user.email,
+        startsAt: startsAt.toISOString(),
+        startsAtMs: startsAt.getTime(),
+        submittedAt: firebase.database.ServerValue.TIMESTAMP,
+      };
+      await api.db.ref("communityEvents").push(eventData);
+      ui.form.reset();
+      await loadData();
+      setStatus("Propunerea a fost trimisă ownerului locației pentru verificare.", "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    } finally {
+      ui.submit.disabled = false;
+    }
   });
 
-  render();
-  if (!state.storageAvailable) {
-    setStatus("Nu am putut citi propunerile salvate. Stocarea browserului este indisponibilă sau datele sunt corupte.", "error");
+  window.addEventListener("fomo-auth-changed", () => {
+    loadData().catch((error) => {
+      console.error("Could not refresh online event data.", error);
+      setStatus(error.message, "error");
+    });
+  });
+  window.addEventListener("fomo-firebase-ready", () => {
+    loadData().catch((error) => {
+      console.error("Could not load online event data.", error);
+      setStatus(error.message, "error");
+    });
+  });
+  if (api.configured) {
+    loadData().catch((error) => {
+      console.error("Could not load online event data.", error);
+      setStatus(error.message, "error");
+    });
   }
 })();

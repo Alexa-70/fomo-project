@@ -4,6 +4,7 @@ votes.json
 # Logs and temporary files
 *.log
 *.tmp
+node_modules/
 
 # Editor and operating-system files
 .vscode/
