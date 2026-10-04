@@ -4,14 +4,20 @@
   left: 50%;
   bottom: max(16px, env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: 56px 56px 84px 56px 56px;
+  grid-template-columns: max-content 84px max-content;
   column-gap: 10px;
   align-items: center;
   transform: translateX(-50%);
 }
 
 .bottom-navigation-actions {
-  display: contents;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bottom-navigation-actions-right {
+  grid-column: 3;
 }
 
 .bottom-navigation-button {
@@ -55,7 +61,7 @@
   height: 84px;
   font-size: 11px;
   justify-self: center;
-  grid-column: 3;
+  grid-column: 2;
   z-index: 1;
 }
 
@@ -150,6 +156,162 @@
 
 .profile-panel[hidden] {
   display: none;
+}
+
+.profile-auth-panel {
+  margin: 18px 0 4px;
+  padding: 18px;
+  border: 1px solid rgba(32, 29, 51, 0.12);
+  border-radius: 18px;
+  background: #fffdf6;
+}
+
+.profile-auth-panel .profile-section-heading h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.profile-auth-switch {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #f4ead7;
+}
+
+.profile-auth-switch[hidden] {
+  display: none;
+}
+
+.profile-auth-switch button {
+  flex: 1;
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #6e6b7d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.profile-auth-switch button.active {
+  background: #f49022;
+  color: #201d33;
+  box-shadow: 0 2px 8px rgba(32, 29, 51, 0.1);
+}
+
+.profile-auth-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.profile-auth-form[hidden] {
+  display: none;
+}
+
+.profile-auth-field {
+  display: grid;
+  gap: 6px;
+  color: #4e4b5c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-auth-field input {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid rgba(32, 29, 51, 0.16);
+  border-radius: 11px;
+  outline: 0;
+  background: #fbf5e6;
+  color: #201d33;
+  font: inherit;
+  font-size: 14px;
+}
+
+.profile-auth-field input:focus {
+  border-color: #2ea6e0;
+  box-shadow: 0 0 0 3px rgba(46, 166, 224, 0.14);
+}
+
+.profile-auth-submit {
+  min-height: 43px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 11px;
+  background: #f49022;
+  color: #201d33;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.profile-auth-submit:hover {
+  background: #ffd24c;
+}
+
+.profile-auth-submit:disabled,
+.profile-auth-verify:disabled,
+.profile-auth-reset:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.profile-auth-reset,
+.profile-auth-verify {
+  justify-self: center;
+  padding: 7px 9px;
+  border: 0;
+  background: transparent;
+  color: #1c7fb4;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-auth-account {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.profile-auth-account[hidden] {
+  display: none;
+}
+
+.profile-auth-account p {
+  margin: 0;
+  color: #6e6b7d;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.profile-auth-verify[hidden] {
+  display: none;
+}
+
+.profile-auth-status {
+  min-height: 18px;
+  margin: 10px 0 0;
+  color: #6e6b7d;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.profile-auth-status[data-state="success"] {
+  color: #247a50;
+}
+
+.profile-auth-status[data-state="error"] {
+  color: #b43c27;
 }
 
 body[data-navigation-view]:not([data-navigation-view="home"]) #map,
@@ -786,8 +948,15 @@ body[data-navigation-view]:not([data-navigation-view="home"]) .profile-panel:not
 
 @media (max-width: 420px) {
   .bottom-navigation {
-    grid-template-columns: 50px 50px 76px 50px 50px;
-    column-gap: 8px;
+    width: calc(100vw - 16px);
+    grid-template-columns: minmax(0, 1fr) 76px minmax(0, 1fr);
+    column-gap: 4px;
+  }
+
+  .bottom-navigation-actions {
+    min-width: 0;
+    justify-content: space-between;
+    gap: 4px;
   }
 
   .bottom-navigation-button {
@@ -801,6 +970,13 @@ body[data-navigation-view]:not([data-navigation-view="home"]) .profile-panel:not
     flex-basis: 76px;
     width: 76px;
     height: 76px;
+  }
+
+  .bottom-navigation-actions .bottom-navigation-button {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    padding: 4px;
   }
 
   #home-button svg {

@@ -18,6 +18,7 @@ const map = L.map("map", {
   scrollWheelZoom: true,
   touchZoom: true,
   minZoom: 1,
+  maxZoom: 19,
 })
   .setView([DEFAULT_ORIGIN.latitude, DEFAULT_ORIGIN.longitude], 13);
 
@@ -206,7 +207,9 @@ function setMapLocations(locations) {
   }
 
   const cities = new Set(validLocations.map((location) => location.city));
-  locationCount.textContent = `${validLocations.length} locații · ${cities.size} orașe`;
+  if (locationCount) {
+    locationCount.textContent = `${validLocations.length} locații · ${cities.size} orașe`;
+  }
   if (!hasFitLocationBounds && validLocations.length) {
     hasFitLocationBounds = true;
     map.fitBounds(

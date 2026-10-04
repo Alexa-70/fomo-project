@@ -259,6 +259,7 @@
     state.user = api.user();
     state.emailVerified = state.user.emailVerified;
     await state.user.getIdToken(true);
+    await api.ensureUserProfile(state.user);
     const [adminSnapshot, locations] = await Promise.all([
       api.db.ref(`admins/${state.user.uid}`).once("value"),
       api.locations(),

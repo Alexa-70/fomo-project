@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="./styles.css?v=warm-palette-v1" />
     <link rel="stylesheet" href="./settings-panel.css?v=warm-palette-v1" />
     <link rel="stylesheet" href="./event-workflow.css?v=warm-palette-v1" />
-    <link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=friends-list-v1" />
+    <link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=profile-firebase-auth-v2" />
     <link rel="stylesheet" href="./styles.css?v=floating-v1" />
     <link rel="stylesheet" href="./settings-panel.css" />
     <link rel="stylesheet" href="./event-workflow.css" />
@@ -169,6 +169,52 @@
         <button class="profile-close-button" id="profile-close-button" type="button" aria-label="Înapoi la hartă">×</button>
       </header>
 
+      <section class="profile-auth-panel" aria-labelledby="profile-auth-heading">
+        <div class="profile-section-heading">
+          <div>
+            <p class="eyebrow">Cont FOMO</p>
+            <h2 id="profile-auth-heading">Autentificare</h2>
+          </div>
+        </div>
+        <div class="profile-auth-switch" role="tablist" aria-label="Autentificare sau creare cont">
+          <button class="active" id="profile-login-tab" type="button" role="tab" aria-selected="true">Login</button>
+          <button id="profile-signup-tab" type="button" role="tab" aria-selected="false">Creează cont</button>
+        </div>
+        <form class="profile-auth-form" id="profile-login-form">
+          <label class="profile-auth-field">
+            <span>Adresa de email</span>
+            <input name="email" type="email" maxlength="254" autocomplete="email" required placeholder="nume@exemplu.ro" />
+          </label>
+          <label class="profile-auth-field">
+            <span>Parola</span>
+            <input name="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required />
+          </label>
+          <button class="profile-auth-submit" type="submit">Autentifică-te</button>
+          <button class="profile-auth-reset" id="profile-reset-password" type="button">Am uitat parola</button>
+        </form>
+        <form class="profile-auth-form" id="profile-signup-form" hidden>
+          <label class="profile-auth-field">
+            <span>Numele tău</span>
+            <input name="username" type="text" maxlength="80" autocomplete="name" required placeholder="Cum te numești?" />
+          </label>
+          <label class="profile-auth-field">
+            <span>Adresa de email</span>
+            <input name="email" type="email" maxlength="254" autocomplete="email" required placeholder="nume@exemplu.ro" />
+          </label>
+          <label class="profile-auth-field">
+            <span>Parola (minimum 8 caractere)</span>
+            <input name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required />
+          </label>
+          <button class="profile-auth-submit" type="submit">Creează cont</button>
+        </form>
+        <div class="profile-auth-account" id="profile-auth-account" hidden>
+          <p id="profile-auth-email"></p>
+          <button class="profile-auth-verify" id="profile-resend-verification" type="button" hidden>Retrimite emailul de confirmare</button>
+          <button class="profile-auth-submit" id="profile-signout" type="button">Deconectează-te</button>
+        </div>
+        <p class="profile-auth-status" id="profile-auth-status" role="status" aria-live="polite"></p>
+      </section>
+
       <section class="profile-hero" aria-label="Profilul tău">
         <div class="profile-avatar" aria-hidden="true">
           <svg viewBox="0 0 64 64"><circle cx="32" cy="23" r="11" /><path d="M12 57c1.5-12 9-19 20-19s18.5 7 20 19" /></svg>
@@ -181,7 +227,7 @@
           <button type="button" id="profile-name-cancel">Anulează</button>
         </form>
         <button class="profile-edit-name" id="profile-edit-name" type="button">Editează numele</button>
-        <p class="profile-account-note">Profil local · date păstrate în acest browser</p>
+        <p class="profile-account-note" id="profile-account-note">Profil local · date păstrate în acest browser</p>
       </section>
 
       <section class="profile-section" aria-labelledby="profile-badges-heading">
@@ -246,14 +292,14 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
-    <script src="./app.js?v=floating-v2"></script>
+    <script src="./app.js?v=location-map-fix-v1"></script>
     <script src="./settings-panel.js"></script>
     <script src="./firebase-config.js"></script>
-    <script src="./firebase-client.js"></script>
+    <script src="./firebase-client.js?v=profile-repair-v2"></script>
     <script src="./event-workflow.js"></script>
-    <script src="./account-panel.js"></script>
+    <script src="./account-panel.js?v=profile-repair-v1"></script>
     <script src="./route-planner.js"></script>
-    <script src="./buttons-ui/buttons-ui.js?v=friends-list-v1"></script>
+    <script src="./buttons-ui/buttons-ui.js?v=profile-auth-status-v3"></script>
     <script src="./ai-assistant.js"></script>
   </body>
 </html>

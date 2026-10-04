@@ -22,8 +22,21 @@
   const searchResults = document.querySelector("#search-results");
   const searchResultsStatus = document.querySelector("#search-results-status");
   const profileUsername = document.querySelector("#profile-username");
+  const profileAccountNote = document.querySelector("#profile-account-note");
   const profileNameEditor = document.querySelector("#profile-name-editor");
   const profileNameInput = document.querySelector("#profile-name-input");
+  const profileEditName = document.querySelector("#profile-edit-name");
+  const profileAuthSwitch = document.querySelector(".profile-auth-switch");
+  const profileLoginTab = document.querySelector("#profile-login-tab");
+  const profileSignupTab = document.querySelector("#profile-signup-tab");
+  const profileLoginForm = document.querySelector("#profile-login-form");
+  const profileSignupForm = document.querySelector("#profile-signup-form");
+  const profileAuthAccount = document.querySelector("#profile-auth-account");
+  const profileAuthEmail = document.querySelector("#profile-auth-email");
+  const profileAuthStatus = document.querySelector("#profile-auth-status");
+  const profileResendVerification = document.querySelector("#profile-resend-verification");
+  const profileResetPassword = document.querySelector("#profile-reset-password");
+  const profileSignout = document.querySelector("#profile-signout");
   const profileBadges = document.querySelector("#profile-badges");
   const profilePlacesList = document.querySelector("#profile-places-list");
   const mapHint = document.querySelector("#map-hint");
@@ -195,6 +208,128 @@
     return true;
   }
 
+  function setProfileAuthStatus(message, state = "") {
+    profileAuthStatus.textContent = message;
+    if (state) profileAuthStatus.dataset.state = state;
+    else delete profileAuthStatus.dataset.state;
+  }
+
+  function profileAuthErrorMessage(error, action) {
+    const isPermissionDenied = error.code === "PERMISSION_DENIED" ||
+      String(error.message).includes("PERMISSION_DENIED");
+    if (isPermissionDenied) {
+      return `Firebase a refuzat ${action} profilului. Regulile Realtime Database active nu permit accesul la users/{UID}. Publică regulile din database.rules.json cu: npx --yes firebase-tools@latest deploy --only database --project fomo-68a85`;
+    }
+    return error.message;
+  }
+
+  function setProfileAuthMode(mode) {
+    const isSignup = mode === "signup";
+    profileLoginForm.hidden = isSignup;
+    profileSignupForm.hidden = !isSignup;
+    profileLoginTab.classList.toggle("active", !isSignup);
+    profileSignupTab.classList.toggle("active", isSignup);
+    profileLoginTab.setAttribute("aria-selected", String(!isSignup));
+    profileSignupTab.setAttribute("aria-selected", String(isSignup));
+    setProfileAuthStatus("");
+  }
+
+  async function renderProfileAccount(user) {
+    const api = window.FomoFirebase;
+    if (!api || !api.configured) {
+      profileAuthSwitch.hidden = true;
+      profileLoginForm.hidden = true;
+      profileSignupForm.hidden = true;
+      profileAuthAccount.hidden = true;
+      profileEditName.hidden = true;
+      setProfileAuthStatus(
+        api && api.error
+          ? "Firebase nu a putut porni. Verifică configurația și consola browserului."
+          : "Autentificarea nu este disponibilă. Configurează Firebase pentru a continua.",
+        "error",
+      );
+      return;
+    }
+
+    if (!user) {
+      profileAuthSwitch.hidden = false;
+      profileAuthAccount.hidden = true;
+      profileEditName.hidden = false;
+      profileAccountNote.textContent = "Profil local · autentifică-te pentru sincronizarea contului.";
+      profileUsername.textContent = readStoredValue(profileNameKey, "Explorator");
+      setProfileAuthMode("login");
+      return;
+    }
+
+    profileAuthSwitch.hidden = true;
+    profileLoginForm.hidden = true;
+    profileSignupForm.hidden = true;
+    profileAuthAccount.hidden = false;
+    profileEditName.hidden = true;
+    profileNameEditor.hidden = true;
+    profileAuthEmail.textContent = `${user.email || ""}${user.emailVerified ? " · email confirmat" : " · email neconfirmat"}`;
+    profileResendVerification.hidden = user.emailVerified;
+    profileAccountNote.textContent = "Cont conectat prin Firebase Authentication.";
+    profileUsername.textContent = user.displayName || user.email || "Utilizator";
+    setProfileAuthStatus("");
+    profileAuthEmail.textContent = `${user.email || ""}${user.emailVerified ? " · email confirmat" : " · email neconfirmat"}`;
+    return true;
+  }
+
+  async function handleProfileLogin(event) {
+    event.preventDefault();
+    const submit = profileLoginForm.querySelector('button[type="submit"]');
+    const values = new FormData(profileLoginForm);
+    submit.disabled = true;
+    setProfileAuthStatus("Se verifică datele de autentificare...");
+    try {
+      await window.FomoFirebase.auth.signInWithEmailAndPassword(
+        String(values.get("email")).trim().toLowerCase(),
+        String(values.get("password")),
+      );
+      const profileLoaded = await renderProfileAccount(window.FomoFirebase.user());
+      if (profileLoaded) setProfileAuthStatus("Autentificare reușită.", "success");
+    } catch (error) {
+      console.error("Firebase profile sign-in failed.", error);
+      setProfileAuthStatus(`Autentificarea a eșuat: ${profileAuthErrorMessage(error, "accesarea")}`, "error");
+    } finally {
+      submit.disabled = false;
+    }
+  }
+
+  async function handleProfileSignup(event) {
+    event.preventDefault();
+    const submit = profileSignupForm.querySelector('button[type="submit"]');
+    const values = new FormData(profileSignupForm);
+    const username = String(values.get("username")).trim();
+    const email = String(values.get("email")).trim().toLowerCase();
+    const password = String(values.get("password"));
+    if (!username || username.length > 80 || password.length < 8) {
+      setProfileAuthStatus("Introdu un nume și o parolă de cel puțin 8 caractere.", "error");
+      return;
+    }
+
+    submit.disabled = true;
+    setProfileAuthStatus("Se creează contul...");
+    try {
+      const credential = await window.FomoFirebase.auth.createUserWithEmailAndPassword(email, password);
+      await credential.user.updateProfile({ displayName: username });
+      await window.FomoFirebase.db.ref(`users/${credential.user.uid}`).set({
+        email,
+        username,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+      });
+      await credential.user.sendEmailVerification();
+      await renderProfileAccount(credential.user);
+      setProfileAuthStatus("Cont creat. Verifică emailul pentru a confirma adresa.", "success");
+    } catch (error) {
+      console.error("Firebase profile sign-up failed.", error);
+      setProfileAuthStatus(`Înregistrarea nu a putut fi finalizată: ${profileAuthErrorMessage(error, "scrierea")}`, "error");
+    } finally {
+      submit.disabled = false;
+    }
+  }
+
   function loadProfileDetails() {
     profileUsername.textContent = readStoredValue(profileNameKey, "Explorator");
     const savedVisits = readStoredValue(profileVisitsKey, "[]");
@@ -321,9 +456,59 @@
     if (!isOpen) {
       loadProfileDetails();
       profileNameEditor.hidden = true;
+      renderProfileAccount(window.FomoFirebase?.user() || null);
     }
     setNavigationView(isOpen ? "home" : "profile");
   });
+  profileLoginTab.addEventListener("click", () => setProfileAuthMode("login"));
+  profileSignupTab.addEventListener("click", () => setProfileAuthMode("signup"));
+  profileLoginForm.addEventListener("submit", handleProfileLogin);
+  profileSignupForm.addEventListener("submit", handleProfileSignup);
+  profileResetPassword.addEventListener("click", async () => {
+    const email = String(new FormData(profileLoginForm).get("email") || "").trim().toLowerCase();
+    if (!email) {
+      setProfileAuthStatus("Introdu adresa de email pentru a primi linkul de resetare.", "error");
+      profileLoginForm.elements.email.focus();
+      return;
+    }
+    try {
+      await window.FomoFirebase.auth.sendPasswordResetEmail(email);
+      setProfileAuthStatus("Am trimis un link de resetare dacă adresa există în sistem.", "success");
+    } catch (error) {
+      console.error("Firebase password reset failed.", error);
+      setProfileAuthStatus(`Nu am putut trimite linkul de resetare: ${error.message}`, "error");
+    }
+  });
+  profileResendVerification.addEventListener("click", async () => {
+    try {
+      await window.FomoFirebase.user().sendEmailVerification();
+      setProfileAuthStatus("Emailul de confirmare a fost retrimis.", "success");
+    } catch (error) {
+      console.error("Firebase verification email failed.", error);
+      setProfileAuthStatus(`Nu am putut retrimite emailul: ${error.message}`, "error");
+    }
+  });
+  profileSignout.addEventListener("click", async () => {
+    try {
+      await window.FomoFirebase.auth.signOut();
+      loadProfileDetails();
+      await renderProfileAccount(null);
+      setProfileAuthStatus("Te-ai deconectat.", "success");
+    } catch (error) {
+      console.error("Firebase profile sign-out failed.", error);
+      setProfileAuthStatus(`Deconectarea a eșuat: ${error.message}`, "error");
+    }
+  });
+  if (window.FomoFirebase?.configured) {
+    window.FomoFirebase.auth.onAuthStateChanged((user) => {
+      renderProfileAccount(user).catch((error) => {
+        console.error("Could not update Firebase profile state.", error);
+        setProfileAuthStatus(`Nu am putut actualiza starea contului: ${error.message}`, "error");
+      });
+    });
+  } else {
+    renderProfileAccount(null);
+  }
   document.querySelector("#profile-edit-name").addEventListener("click", () => {
     profileNameInput.value = profileUsername.textContent;
     profileNameEditor.hidden = false;
