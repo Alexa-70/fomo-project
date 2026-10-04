@@ -92,9 +92,10 @@ Pentru inițializare:
 
 1. În Firebase Console, Authentication → Sign-in method, activează **Email/Password**. În Authentication → Settings → Authorized domains, adaugă `localhost`.
 2. Instanța gratuită Realtime Database `fomo-68a85-default-rtdb` a fost creată în regiunea **United States (us-central1)**. URL-ul ei este `https://fomo-68a85-default-rtdb.firebaseio.com`, deja setat în `firebase-config.js`. Realtime Database este disponibil pe Spark; Cloud Functions și Blaze nu sunt folosite.
-3. Autentifică Firebase CLI și publică regulile Realtime Database:
+3. Autentifică Firebase CLI și publică regulile Realtime Database. Regulile trebuie republicate și după orice modificare a fișierului `database.rules.json`:
 
    ```powershell
+   npx --yes firebase-tools@latest login
    npx --yes firebase-tools@latest deploy --only database --project fomo-68a85
    ```
 
@@ -102,6 +103,10 @@ Pentru inițializare:
 5. În Realtime Database creează manual `admins/{UID}` cu valoarea booleană `true`. Aceasta este singura cale de a acorda administrator; aplicația publică nu permite promovarea utilizatorilor în admin.
 6. Deconectează-te și autentifică-te din nou. Catalogul celor 90 de locații este deja încărcat în Realtime Database; administratorul poate folosi butonul **Încarcă cele 90 de locații** din meniul **Cont** pentru a-l reîncărca, fără să înlocuiască ownerii existenți.
 7. Pornește backendul local cu `.\start.ps1` și accesează `http://localhost:5101/`.
+
+La autentificare, dacă profilul `users/{UID}` lipsește, aplicația îl creează din emailul și numele contului Firebase, fără să suprascrie profilele existente. Utilizatorul poate citi și actualiza numai profilul asociat propriului UID; validările bazei verifică emailul, username-ul și data creării, iar câmpurile suplimentare sunt respinse.
+
+Pagina **Profil** afișează starea contului din Firebase Authentication; nu cere citirea profilului din Realtime Database doar pentru a afișa emailul autentificat.
 
 Cele 90 de locații sunt afișate ca puncte cyan grupate pe hartă; la încărcare, harta se încadrează pe toate cele nouă orașe, iar apăsarea/hover-ul arată informațiile locației. Evenimentele aprobate afișează descrierea în popup. `events.json` este gol, astfel încât evenimentele demonstrative verzi să nu mai apară pe hartă. Utilizatorii cu email confirmat pot trimite cereri de owner către administratori; cererile și deciziile se actualizează în timp real. La aprobare, utilizatorul primește rolul **Owner**, vizibil în profil, pentru locația respectivă și poate aproba sau respinge evenimentele trimise acolo. Administratorii văd și decid cererile în secțiunea **Solicitări de owner** din meniul **Cont**.
 
