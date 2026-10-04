@@ -55,7 +55,7 @@ Caută până la cinci locații prin Nominatim și întoarce numele și coordona
 
 ### Trasee auto și transport public
 
-Butonul „Cum ajung?” calculează ruta prin OSRM și afișează pe harta FOMO doar linia și marcajele de plecare/destinație, fără panou cu detalii despre mașină sau durată. Ruta poate fi anulată fără a șterge originea selectată. Butonul „Transport public” deschide Google Maps cu indicațiile de autobuz/tren. Poți apăsa „Folosește locația mea” sau căuta o adresă pentru a seta plecarea; cheia Google Maps API nu este necesară.
+Butonul „Cum ajung?” calculează ruta prin OSRM și afișează pe harta FOMO doar linia și marcajele de plecare/destinație, fără panou cu detalii despre mașină sau durată. Ruta poate fi anulată fără a șterge originea selectată. Butonul „Transport public” deschide Google Maps cu indicațiile de autobuz/tren. Poți apăsa „Folosește locația mea” sau căuta o adresă pentru a seta plecarea; cheia Google Maps API nu este necesară. Pe GitHub Pages, calculul rutei și căutarea adresei folosesc direct serviciile publice OSRM și Nominatim, astfel încât funcția de rută nu depinde de backendul local. Serviciile publice pot avea limite sau indisponibilități; când folosești GitHub Pages, coordonatele plecării și destinației sunt trimise către OSRM, iar textul adresei căutate către Nominatim.
 
 ### Ridesharing: Uber și integrarea viitoare Bolt
 

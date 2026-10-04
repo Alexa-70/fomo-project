@@ -17,8 +17,8 @@
   async function resolveOrigin() {
     const query = context.originInput.value.trim();
     if (query && query !== context.originInput.dataset.selectedQuery) {
-      const data = await context.apiRequest(`/api/search?q=${encodeURIComponent(query)}`);
-      const result = data.results[0];
+      const results = await context.searchPlaces(query);
+      const result = results[0];
       if (!result) {
         throw new Error(`Nu am găsit locația „${query}”. Încearcă o adresă sau un oraș mai precis.`);
       }
@@ -40,6 +40,31 @@
       throw new Error("Alege o locație de plecare sau folosește locația ta.");
     }
     return selectedOrigin;
+  }
+
+  async function requestHostedRoute(origin, destination) {
+    const coordinates = [
+      origin.longitude,
+      origin.latitude,
+      destination.longitude,
+      destination.latitude,
+    ];
+    if (!coordinates.every(Number.isFinite)) {
+      throw new Error("Coordonatele punctelor de plecare și destinație sunt invalide.");
+    }
+
+    const [originLongitude, originLatitude, destinationLongitude, destinationLatitude] = coordinates;
+    const url = `https://router.project-osrm.org/route/v1/driving/${originLongitude},${originLatitude};${destinationLongitude},${destinationLatitude}?overview=full&geometries=geojson`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Serviciul public de rutare nu este disponibil (HTTP ${response.status}).`);
+    }
+
+    const data = await response.json();
+    if (data.code !== "Ok" || !data.routes?.[0]?.geometry) {
+      throw new Error("Serviciul public nu a găsit o rută între aceste puncte.");
+    }
+    return { geometry: data.routes[0].geometry };
   }
 
   function clearRoute() {
@@ -101,11 +126,13 @@
           longitude: Number(destination.longitude),
         },
       };
-      const route = await context.apiRequest("/api/routes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(coordinates),
-      });
+      const route = context.isGitHubPages()
+        ? await requestHostedRoute(coordinates.origin, coordinates.destination)
+        : await context.apiRequest("/api/routes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(coordinates),
+        });
       if (!route.geometry || !Array.isArray(route.geometry.coordinates) || route.geometry.coordinates.length < 2) {
         throw new Error("Serviciul de rute nu a întors geometria traseului.");
       }
