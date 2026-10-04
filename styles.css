@@ -44,7 +44,7 @@ button, input { font: inherit; }
 }
 
 /* ============ OVERLAY HARTĂ ============ */
-.map-badge, .map-hint {
+.map-hint {
   position: fixed;
   z-index: 500;
   border: 1px solid rgba(32, 29, 51, 0.14);
@@ -53,32 +53,6 @@ button, input { font: inherit; }
   box-shadow: 0 8px 24px rgba(32, 29, 51, 0.16);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-}
-
-.map-badge {
-  top: 18px;
-  right: 18px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 13px;
-  border-radius: 999px;
-  font-size: 11px;
-}
-
-.map-location-count {
-  padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.18);
-  color: #c7d1df;
-  font-size: 10px;
-}
-
-.map-live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 10px rgba(244, 144, 34, 0.55);
 }
 
 .map-hint {
@@ -703,7 +677,6 @@ h1 {
     border-radius: 18px;
   }
 
-  .map-badge { top: 12px; left: 12px; font-size: 10px; padding: 8px 11px; }
   .map-hint {
     right: 12px;
     bottom: 82px;

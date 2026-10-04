@@ -68,7 +68,6 @@ const locationLayer = L.markerClusterGroup({
   maxClusterRadius: 34,
 }).addTo(map);
 let hasFitLocationBounds = false;
-const locationCount = document.querySelector("#map-location-count");
 let searchTimer = null;
 let searchRequestId = 0;
 
@@ -269,10 +268,6 @@ function setMapLocations(locations) {
     locationLayer.addLayer(marker);
   }
 
-  const cities = new Set(validLocations.map((location) => location.city));
-  if (locationCount) {
-    locationCount.textContent = `${validLocations.length} locații · ${cities.size} orașe`;
-  }
   if (!hasFitLocationBounds && validLocations.length) {
     hasFitLocationBounds = true;
     map.fitBounds(
