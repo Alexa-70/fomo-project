@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#090b12" />
-    <title>Locally — evenimente în apropiere</title>
+    <!-- 1. Actualizat Titlul pentru proiectul FOMO -->
+    <title>FOMO — Localuri și Evenimente Live</title>
     <link rel="preconnect" href="https://unpkg.com" />
     <link rel="preconnect" href="https://tile.openstreetmap.org" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -13,15 +14,17 @@
   <body>
     <main class="app-shell">
       <aside class="planner">
-        <a class="brand" href="#" aria-label="Locally, acasă">
-          <span class="brand-mark" aria-hidden="true">✳</span>
-          <span>local<span class="brand-accent">ly</span></span>
+        <!-- 2. Actualizat Branding: Schimbat din locally în FOMO -->
+        <a class="brand" href="#" aria-label="FOMO, acasă">
+          <span class="brand-mark" aria-hidden="true">🔥</span>
+          <span>FOMO</span>
         </a>
 
+        <!-- 3. Personalizat textele introductive pentru conceptul FOMO -->
         <div class="intro">
-          <p class="eyebrow">Descoperă împreună</p>
-          <h1>Ce se întâmplă în jurul tău?</h1>
-          <p class="intro-copy">Vezi planurile comunității pe hartă, votează ce-ți place și găsește drumul până acolo.</p>
+          <p class="eyebrow">Don't miss out tonight</p>
+          <h1>Cine unde iese diseară?</h1>
+          <p class="intro-copy">Vezi unde se adună comunitatea ta în timp real. Descoperă ce localuri sunt fierbinți ACUM, găsește-ți gașca și prinde ofertele flash.</p>
         </div>
 
         <section class="origin-panel" aria-label="Locația ta">
@@ -34,30 +37,30 @@
             <input id="origin" name="origin" type="text" placeholder="Oraș sau adresă" autocomplete="off" aria-label="Punctul de plecare" />
             <ul class="suggestions" id="origin-suggestions" role="listbox" aria-label="Sugestii pentru plecare" hidden></ul>
           </div>
-          <p class="origin-hint" id="origin-hint">Punct de plecare implicit: Cluj-Napoca</p>
+          <p class="origin-hint" id="origin-hint">Punct de plecare implicit: București</p>
         </section>
 
         <section class="events-section" aria-labelledby="events-heading">
           <div class="events-heading">
             <div>
-              <p class="eyebrow">Alege planul</p>
-              <h2 id="events-heading">Evenimente în apropiere</h2>
+              <p class="eyebrow">Alege vibe-ul</p>
+              <h2 id="events-heading">Localuri active în zonă</h2>
             </div>
             <span class="event-count" id="event-count">—</span>
           </div>
           <div class="event-list" id="event-list" aria-live="polite">
-            <p class="loading-events">Se încarcă evenimentele...</p>
+            <p class="loading-events">Se încarcă pulsul orașului...</p>
           </div>
         </section>
 
-        <p class="status-message" id="status-message" role="status">Conectare la hartă...</p>
+        <p class="status-message" id="status-message" role="status">Conectare la serverul FOMO...</p>
         <p class="provider-note">Hărți © OpenStreetMap · Rute cu OSRM</p>
       </aside>
 
       <section class="map-panel" aria-label="Hartă cu evenimente">
         <div id="map" role="application" aria-label="Hartă interactivă cu evenimente"></div>
-        <div class="map-badge"><span class="map-live-dot"></span>Planuri pe hartă</div>
-        <div class="map-hint" id="map-hint">Selectează un eveniment pentru detalii și traseu</div>
+        <div class="map-badge"><span class="map-live-dot"></span>Vibe Map Live</div>
+        <div class="map-hint" id="map-hint">Selectează un local pentru a vedea comunitatea și traseul</div>
       </section>
     </main>
 
