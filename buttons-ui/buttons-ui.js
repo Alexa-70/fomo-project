@@ -9,9 +9,14 @@
   const friendsFindButton = document.querySelector("#friends-find-button");
   const friendsSearchForm = document.querySelector("#friends-search-form");
   const friendsSearchInput = document.querySelector("#friends-search-input");
+  const friendsSearchResults = document.querySelector("#friends-search-results");
   const friendsStatus = document.querySelector("#friends-status");
   const friendsList = document.querySelector("#friends-list");
   const friendsCount = document.querySelector("#friends-count");
+  const friendsRequestsSection = document.querySelector(".friends-requests-section");
+  const friendsRequestsList = document.querySelector("#friends-requests-list");
+  const friendsRequestsCount = document.querySelector("#friends-requests-count");
+  const friendsCountBadge = document.querySelector("#friends-count-badge");
   const searchPanel = document.querySelector("#search-panel");
   const profilePanel = document.querySelector("#profile-panel");
   const profileCloseButton = document.querySelector("#profile-close-button");
@@ -42,7 +47,12 @@
   const mapHint = document.querySelector("#map-hint");
   const profileNameKey = "fomo-profile-name-v1";
   const profileVisitsKey = "fomo-place-visits-v1";
-  const friendsStorageKey = "fomo-local-friends-v1";
+  let friendUser = null;
+  let friendPublicProfile = null;
+  let friendRecords = {};
+  let incomingFriendRequests = {};
+  let friendSubscriptions = [];
+  let friendSubscriptionUid = null;
   let activeSearchCategory = "all";
 
   function setNavigationView(view) {
@@ -131,81 +141,268 @@
     }
   }
 
-  function loadFriends() {
-    let storedFriends;
-    try {
-      storedFriends = localStorage.getItem(friendsStorageKey);
-    } catch (error) {
-      console.error("Could not read the local friends list.", error);
-      friendsStatus.textContent = "Nu am putut accesa lista salvată în acest browser.";
-      return [];
-    }
-
-    if (!storedFriends) return [];
-    try {
-      const friends = JSON.parse(storedFriends);
-      if (!Array.isArray(friends) || friends.some((friend) => typeof friend !== "string")) {
-        throw new Error("Stored friends are not a list of names.");
-      }
-      return friends;
-    } catch (error) {
-      console.error("Could not parse the local friends list.", error);
-      friendsStatus.textContent = "Lista salvată nu poate fi citită.";
-      return [];
-    }
-  }
-
-  function renderFriends(query = "") {
-    const friends = loadFriends();
-    const normalizedQuery = query.trim().toLocaleLowerCase("ro");
-    const visibleFriends = friends.filter((friend) => friend.toLocaleLowerCase("ro").includes(normalizedQuery));
+  function renderFriends() {
+    const friends = Object.entries(friendRecords);
     friendsCount.textContent = String(friends.length);
+    friendsCountBadge.hidden = !friendUser;
+    friendsCountBadge.textContent = friends.length > 9 ? "9+" : String(friends.length);
+    friendsButton.setAttribute("aria-label", `Friends, ${friends.length} ${friends.length === 1 ? "prieten" : "prieteni"}`);
     friendsList.replaceChildren();
 
-    if (!visibleFriends.length) {
+    if (!friendUser) {
+      friendsList.append(createFriendsEmpty("Autentifică-te cu un cont cu email confirmat pentru a folosi prietenii."));
+      return;
+    }
+    if (!friends.length) {
       const empty = document.createElement("li");
       empty.className = "friends-empty";
-      empty.textContent = normalizedQuery
-        ? "Nu am găsit nume potrivite în lista ta."
-        : "Lista ta este goală. Caută și adaugă un nume.";
+      empty.textContent = "Nu ai încă prieteni. Caută username-ul exact al unei persoane.";
       friendsList.append(empty);
       return;
     }
 
-    visibleFriends.forEach((friend) => {
+    friends.forEach(([friendUid, friend]) => {
       const item = document.createElement("li");
       item.className = "friend-item";
       const avatar = document.createElement("span");
       avatar.className = "friend-avatar";
       avatar.setAttribute("aria-hidden", "true");
-      avatar.textContent = friend.trim().charAt(0).toLocaleUpperCase("ro") || "?";
+      avatar.textContent = String(friend.username || "?").trim().charAt(0).toLocaleUpperCase("ro") || "?";
       const name = document.createElement("span");
       name.className = "friend-name";
-      name.textContent = friend;
+      name.textContent = friend.username;
       const removeButton = document.createElement("button");
       removeButton.className = "friend-remove-button";
       removeButton.type = "button";
       removeButton.textContent = "Elimină";
-      removeButton.setAttribute("aria-label", `Elimină ${friend} din lista locală`);
-      removeButton.addEventListener("click", () => {
-        saveFriends(loadFriends().filter((savedFriend) => savedFriend !== friend));
+      removeButton.setAttribute("aria-label", `Elimină ${friend.username} din lista de prieteni`);
+      removeButton.addEventListener("click", async () => {
+        removeButton.disabled = true;
+        try {
+          const updates = {
+            [`friends/${friendUser.uid}/${friendUid}`]: null,
+            [`friends/${friendUid}/${friendUser.uid}`]: null,
+            [`friendRequests/${friendUser.uid}/${friendUid}`]: null,
+            [`friendRequests/${friendUid}/${friendUser.uid}`]: null,
+          };
+          await window.FomoFirebase.db.ref().update(updates);
+          friendsStatus.textContent = `${friend.username} a fost eliminat(ă) din lista de prieteni.`;
+        } catch (error) {
+          removeButton.disabled = false;
+          friendsStatus.textContent = `Nu am putut elimina prietenul: ${error.message}`;
+        }
       });
       item.append(avatar, name, removeButton);
       friendsList.append(item);
     });
   }
 
-  function saveFriends(friends) {
-    try {
-      localStorage.setItem(friendsStorageKey, JSON.stringify(friends));
-    } catch (error) {
-      console.error("Could not save the local friends list.", error);
-      friendsStatus.textContent = "Nu am putut salva lista. Verifică spațiul disponibil în browser.";
-      return false;
+  function createFriendsEmpty(message) {
+    const empty = document.createElement("li");
+    empty.className = "friends-empty";
+    empty.textContent = message;
+    return empty;
+  }
+
+  function renderFriendRequests() {
+    friendsRequestsList.replaceChildren();
+    const requests = Object.entries(incomingFriendRequests)
+      .filter(([, request]) => request.status === "pending" ||
+        (request.status === "accepted" && !friendRecords[request.fromUid]));
+    friendsRequestsSection.hidden = !requests.length;
+    friendsRequestsCount.textContent = String(requests.length);
+    requests.forEach(([requesterUid, request]) => {
+      const item = document.createElement("li");
+      item.className = "friend-item friend-request-item";
+      const details = document.createElement("span");
+      details.className = "friend-name";
+      details.textContent = request.status === "accepted"
+        ? `${request.fromUsername} · finalizează conectarea`
+        : `${request.fromUsername} dorește să te adauge`;
+      item.append(details);
+      const actions = document.createElement("div");
+      actions.className = "friend-request-actions";
+      const acceptButton = document.createElement("button");
+      acceptButton.className = "friends-add-button";
+      acceptButton.type = "button";
+      acceptButton.textContent = request.status === "accepted" ? "Finalizează" : "Acceptă";
+      acceptButton.addEventListener("click", async () => {
+        acceptButton.disabled = true;
+        try {
+          if (request.status !== "accepted") {
+            await window.FomoFirebase.db.ref(`friendRequests/${friendUser.uid}/${requesterUid}`).update({
+              status: "accepted",
+              reviewedAt: firebase.database.ServerValue.TIMESTAMP,
+            });
+          }
+          const updates = {};
+          updates[`friends/${friendUser.uid}/${requesterUid}`] = {
+            uid: requesterUid,
+            username: request.fromUsername,
+            since: firebase.database.ServerValue.TIMESTAMP,
+          };
+          updates[`friends/${requesterUid}/${friendUser.uid}`] = {
+            uid: friendUser.uid,
+            username: request.toUsername,
+            since: firebase.database.ServerValue.TIMESTAMP,
+          };
+          await window.FomoFirebase.db.ref().update(updates);
+          const friendsSnapshot = await window.FomoFirebase.db
+            .ref(`friends/${friendUser.uid}`)
+            .once("value");
+          friendRecords = friendsSnapshot.val() || {};
+          renderFriends();
+          renderFriendRequests();
+          friendsStatus.textContent = `Acum ești prieten(ă) cu ${request.fromUsername}.`;
+        } catch (error) {
+          acceptButton.disabled = false;
+          friendsStatus.textContent = `Nu am putut accepta cererea: ${error.message}`;
+        }
+      });
+      actions.append(acceptButton);
+      if (request.status === "pending") {
+        const rejectButton = document.createElement("button");
+        rejectButton.className = "friend-remove-button";
+        rejectButton.type = "button";
+        rejectButton.textContent = "Refuză";
+        rejectButton.addEventListener("click", async () => {
+          rejectButton.disabled = true;
+          try {
+            await window.FomoFirebase.db.ref(`friendRequests/${friendUser.uid}/${requesterUid}`).update({
+              status: "rejected",
+              reviewedAt: firebase.database.ServerValue.TIMESTAMP,
+            });
+          } catch (error) {
+            rejectButton.disabled = false;
+            friendsStatus.textContent = `Nu am putut refuza cererea: ${error.message}`;
+          }
+        });
+        actions.append(rejectButton);
+      }
+      item.append(actions);
+      friendsRequestsList.append(item);
+    });
+  }
+
+  function clearFriendSubscriptions() {
+    friendSubscriptions.forEach((reference) => reference.off("value"));
+    friendSubscriptions = [];
+    friendSubscriptionUid = null;
+    friendUser = null;
+    friendPublicProfile = null;
+    friendRecords = {};
+    incomingFriendRequests = {};
+    friendsCountBadge.hidden = true;
+    friendsCountBadge.textContent = "";
+    friendsButton.setAttribute("aria-label", "Friends");
+    friendsRequestsSection.hidden = true;
+    renderFriends();
+    renderFriendRequests();
+  }
+
+  async function ensurePublicProfile(user) {
+    const database = window.FomoFirebase.db;
+    const profileRef = database.ref(`publicProfiles/${user.uid}`);
+    const username = String(user.displayName || "").trim();
+    if (!username) {
+      throw new Error("Contul nu are username în Firebase Authentication. Actualizează numele profilului și reîncearcă.");
     }
+    const publicProfile = {
+      username,
+      usernameKey: username.toLocaleLowerCase("ro"),
+    };
+    await profileRef.set(publicProfile);
+    return publicProfile;
+  }
+
+  function getUsernameIndexKey(usernameKey) {
+    const bytes = new TextEncoder().encode(usernameKey);
+    let binary = "";
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  async function ensureUsernameIndex(user, profile) {
+    const indexRef = window.FomoFirebase.db.ref(`usernameIndex/${getUsernameIndexKey(profile.usernameKey)}`);
+    const result = await indexRef.transaction((current) => {
+      if (current === null) {
+        return {
+          uid: user.uid,
+          username: profile.username,
+          usernameKey: profile.usernameKey,
+        };
+      }
+      return current.uid === user.uid ? current : undefined;
+    });
+    if (!result.committed || result.snapshot.child("uid").val() !== user.uid) {
+      throw new Error("Username-ul este deja folosit de un alt cont.");
+    }
+    const indexedProfile = result.snapshot.val();
+    if (indexedProfile.usernameKey !== profile.usernameKey) {
+      throw new Error("Indexul username-ului nu corespunde profilului contului.");
+    }
+  }
+
+  async function setupFriendAccount(user) {
+    if (!user || !window.FomoFirebase?.configured) {
+      clearFriendSubscriptions();
+      friendsStatus.textContent = "Autentifică-te pentru a căuta și adăuga prieteni.";
+      return;
+    }
+    if (friendSubscriptionUid === user.uid) return;
+    clearFriendSubscriptions();
+    friendUser = user;
+    friendSubscriptionUid = user.uid;
     friendsStatus.textContent = "";
-    renderFriends(friendsSearchInput.value);
-    return true;
+    try {
+      await user.reload();
+      await user.getIdToken(true);
+      user = window.FomoFirebase.user();
+      if (!user?.emailVerified) {
+        clearFriendSubscriptions();
+        friendsStatus.textContent = "Confirmă adresa de email pentru a folosi prietenii.";
+        return;
+      }
+      friendPublicProfile = await ensurePublicProfile(user);
+      await ensureUsernameIndex(user, friendPublicProfile);
+      if (friendSubscriptionUid !== user.uid || window.FomoFirebase.user()?.uid !== user.uid) return;
+      const friendsRef = window.FomoFirebase.db.ref(`friends/${user.uid}`);
+      const requestsRef = window.FomoFirebase.db.ref(`friendRequests/${user.uid}`);
+      const friendsListener = friendsRef.on("value", (snapshot) => {
+        if (friendSubscriptionUid !== user.uid) return;
+        friendRecords = snapshot.val() || {};
+        renderFriends();
+        renderFriendRequests();
+      }, (error) => {
+        if (friendSubscriptionUid !== user.uid) return;
+        console.error("Could not load the friends list.", error);
+        friendsStatus.textContent = `Nu am putut încărca lista de prieteni: ${error.message}`;
+      });
+      const requestsListener = requestsRef.on("value", (snapshot) => {
+        if (friendSubscriptionUid !== user.uid) return;
+        incomingFriendRequests = snapshot.val() || {};
+        renderFriendRequests();
+      }, (error) => {
+        if (friendSubscriptionUid !== user.uid) return;
+        console.error("Could not load friend requests.", error);
+        friendsStatus.textContent = `Nu am putut încărca notificările: ${error.message}`;
+      });
+      friendSubscriptions = [
+        { off: (event) => friendsRef.off(event, friendsListener) },
+        { off: (event) => requestsRef.off(event, requestsListener) },
+      ];
+    } catch (error) {
+      if (friendSubscriptionUid !== user.uid) return;
+      friendSubscriptions.forEach((reference) => reference.off("value"));
+      friendSubscriptions = [];
+      friendSubscriptionUid = null;
+      friendUser = user;
+      friendPublicProfile = null;
+      console.error("Could not prepare the friends account.", error);
+      friendsStatus.textContent = `Nu am putut încărca prietenii: ${error.message}`;
+    }
   }
 
   function setProfileAuthStatus(message, state = "") {
@@ -319,6 +516,10 @@
         username,
         createdAt: firebase.database.ServerValue.TIMESTAMP,
       });
+      await window.FomoFirebase.db.ref(`publicProfiles/${credential.user.uid}`).set({
+        username,
+        usernameKey: username.toLocaleLowerCase("ro"),
+      });
       await credential.user.sendEmailVerification();
       await renderProfileAccount(credential.user);
       setProfileAuthStatus("Cont creat. Verifică emailul pentru a confirma adresa.", "success");
@@ -400,7 +601,11 @@
   friendsButton.addEventListener("click", () => {
     const isOpening = friendsPanel.hidden;
     setNavigationView(isOpening ? "friends" : "home");
-    if (isOpening) renderFriends();
+    if (isOpening) {
+      renderFriends();
+      renderFriendRequests();
+      setupFriendAccount(window.FomoFirebase?.user() || null);
+    }
   });
   friendsFindButton.addEventListener("click", () => {
     const isExpanded = friendsFindButton.getAttribute("aria-expanded") === "true";
@@ -409,29 +614,101 @@
     if (isExpanded) {
       friendsSearchInput.value = "";
       friendsStatus.textContent = "";
-      renderFriends();
+      friendsSearchResults.replaceChildren();
     } else {
       friendsSearchInput.focus();
     }
   });
-  friendsSearchInput.addEventListener("input", () => renderFriends(friendsSearchInput.value));
-  friendsSearchForm.addEventListener("submit", (event) => {
+  friendsSearchForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const name = friendsSearchInput.value.trim();
-    if (!name) {
-      friendsStatus.textContent = "Scrie un nume pentru a-l adăuga în lista locală.";
+    const username = friendsSearchInput.value.trim();
+    friendsSearchResults.replaceChildren();
+    if (!username) {
+      friendsStatus.textContent = "Scrie username-ul exact al persoanei.";
       friendsSearchInput.focus();
       return;
     }
-    const friends = loadFriends();
-    if (friends.some((friend) => friend.toLocaleLowerCase("ro") === name.toLocaleLowerCase("ro"))) {
-      friendsStatus.textContent = `${name} este deja în lista ta.`;
+    if (!friendUser) {
+      friendsStatus.textContent = "Autentifică-te și confirmă emailul ca să poți căuta prieteni.";
       return;
     }
-    if (saveFriends([...friends, name])) {
-      friendsSearchInput.value = "";
-      renderFriends();
-      friendsStatus.textContent = `${name} a fost adăugat în lista locală.`;
+    if (!friendPublicProfile) {
+      friendsStatus.textContent = "Profilul prietenilor nu s-a putut inițializa. Închide și redeschide Friends pentru a reîncerca.";
+      return;
+    }
+    const submit = friendsSearchForm.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    friendsStatus.textContent = "Se caută username-ul...";
+    try {
+      const query = username.toLocaleLowerCase("ro");
+      const match = await window.FomoFirebase.db
+        .ref(`usernameIndex/${getUsernameIndexKey(query)}`)
+        .once("value");
+      const target = match.val();
+      if (!target || target.usernameKey !== query) {
+        friendsStatus.textContent = "";
+        return;
+      }
+      if (target.uid === friendUser.uid) {
+        friendsStatus.textContent = "Acesta este username-ul contului tău.";
+        return;
+      }
+      if (friendRecords[target.uid]) {
+        friendsStatus.textContent = `${target.username} este deja în lista ta de prieteni.`;
+        return;
+      }
+
+      const item = document.createElement("li");
+      item.className = "friend-item";
+      const name = document.createElement("span");
+      name.className = "friend-name";
+      name.textContent = target.username;
+      const addButton = document.createElement("button");
+      addButton.className = "friends-add-button";
+      addButton.type = "button";
+      addButton.textContent = "Adaugă";
+      addButton.addEventListener("click", async () => {
+        addButton.disabled = true;
+        try {
+          const database = window.FomoFirebase.db;
+          const receivedRef = database.ref(`friendRequests/${friendUser.uid}/${target.uid}`);
+          const sentRef = database.ref(`friendRequests/${target.uid}/${friendUser.uid}`);
+          const [received, sent] = await Promise.all([
+            receivedRef.once("value"),
+            sentRef.once("value"),
+          ]);
+          if (received.child("status").val() === "pending") {
+            friendsStatus.textContent = `${target.username} ți-a trimis deja o cerere. Accept-o în lista cererilor.`;
+            return;
+          }
+          if (sent.child("status").val() === "pending") {
+            friendsStatus.textContent = `Cererea către ${target.username} este deja trimisă.`;
+            return;
+          }
+          await sentRef.set({
+            fromUid: friendUser.uid,
+            fromUsername: friendPublicProfile.username,
+            toUid: target.uid,
+            toUsername: target.username,
+            status: "pending",
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
+          });
+          friendsStatus.textContent = `Cererea a fost trimisă lui ${target.username}. Va apărea în notificările sale.`;
+          friendsSearchResults.replaceChildren();
+          friendsSearchInput.value = "";
+        } catch (error) {
+          addButton.disabled = false;
+          friendsStatus.textContent = `Nu am putut trimite cererea: ${error.message}`;
+        }
+      });
+      item.append(name, addButton);
+      friendsSearchResults.append(item);
+      friendsStatus.textContent = "";
+    } catch (error) {
+      console.error("Could not search for an exact username.", error);
+      friendsStatus.textContent = `Căutarea nu a reușit: ${error.message}`;
+    } finally {
+      submit.disabled = false;
     }
   });
   searchButton.addEventListener("click", () => {
@@ -501,6 +778,10 @@
   });
   if (window.FomoFirebase?.configured) {
     window.FomoFirebase.auth.onAuthStateChanged((user) => {
+      setupFriendAccount(user).catch((error) => {
+        console.error("Could not update Firebase friends state.", error);
+        friendsStatus.textContent = `Nu am putut actualiza prietenii: ${error.message}`;
+      });
       renderProfileAccount(user).catch((error) => {
         console.error("Could not update Firebase profile state.", error);
         setProfileAuthStatus(`Nu am putut actualiza starea contului: ${error.message}`, "error");

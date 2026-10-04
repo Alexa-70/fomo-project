@@ -315,7 +315,6 @@
 }
 
 body[data-navigation-view]:not([data-navigation-view="home"]) #map,
-body[data-navigation-view]:not([data-navigation-view="home"]) .map-badge,
 body[data-navigation-view]:not([data-navigation-view="home"]) .map-hint,
 body[data-navigation-view]:not([data-navigation-view="home"]) .recenter-button {
   display: none !important;
@@ -674,6 +673,39 @@ body[data-navigation-view]:not([data-navigation-view="home"]) .profile-panel:not
   font: inherit;
   font-size: 12px;
   font-weight: 800;
+}
+
+.friends-add-button:disabled,
+.friend-remove-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.friends-count-badge {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ed5c57;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.friends-search-results:empty {
+  display: none;
+}
+
+.friend-request-item {
+  justify-content: space-between;
+}
+
+.friend-request-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 .friends-status {

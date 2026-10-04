@@ -15,8 +15,104 @@
         ".read": "auth != null && (auth.uid == $uid || (auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true))",
         ".write": "auth != null && auth.uid == $uid && auth.token.email != null",
         ".validate": "newData.hasChildren(['email', 'username', 'createdAt']) && newData.child('email').val() == auth.token.email && newData.child('username').isString() && newData.child('username').val().length > 0 && newData.child('username').val().length <= 80 && newData.child('createdAt').isNumber()",
+        "email": {
+          ".validate": "newData.isString()"
+        },
+        "username": {
+          ".validate": "newData.isString()"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
         "$other": {
           ".validate": false
+        }
+      }
+    },
+    "publicProfiles": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.hasChildren(['username', 'usernameKey']) && newData.child('username').isString() && newData.child('username').val().length > 0 && newData.child('username').val().length <= 80 && newData.child('usernameKey').isString() && newData.child('usernameKey').val().length > 0 && newData.child('usernameKey').val().length <= 80",
+        "username": {
+          ".validate": "newData.isString()"
+        },
+        "usernameKey": {
+          ".validate": "newData.isString()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "usernameIndex": {
+      "$encodedUsernameKey": {
+        ".read": "auth != null && auth.token.email_verified == true",
+        ".write": "auth != null && auth.token.email_verified == true && ((!data.exists() && newData.child('uid').val() == auth.uid) || (data.child('uid').val() == auth.uid && newData.child('uid').val() == auth.uid))",
+        ".validate": "newData.hasChildren(['uid', 'username', 'usernameKey']) && newData.child('uid').isString() && newData.child('uid').val() == auth.uid && newData.child('username').isString() && newData.child('username').val() == root.child('publicProfiles').child(auth.uid).child('username').val() && newData.child('usernameKey').isString() && newData.child('usernameKey').val() == root.child('publicProfiles').child(auth.uid).child('usernameKey').val()",
+        "uid": {
+          ".validate": "newData.isString()"
+        },
+        "username": {
+          ".validate": "newData.isString()"
+        },
+        "usernameKey": {
+          ".validate": "newData.isString()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "friendRequests": {
+      "$recipientUid": {
+        ".read": "auth != null && auth.token.email_verified == true && auth.uid == $recipientUid",
+        "$requesterUid": {
+          ".read": "auth != null && auth.token.email_verified == true && (auth.uid == $recipientUid || auth.uid == $requesterUid)",
+          ".write": "auth != null && auth.token.email_verified == true && ((!newData.exists() && data.child('status').val() != 'pending' && (auth.uid == $recipientUid || auth.uid == $requesterUid)) || (auth.uid == $requesterUid && $requesterUid != $recipientUid && (!data.exists() || data.child('status').val() == 'rejected') && newData.child('status').val() == 'pending' && newData.child('fromUid').val() == auth.uid && newData.child('toUid').val() == $recipientUid) || (auth.uid == $recipientUid && data.child('status').val() == 'pending' && newData.child('fromUid').val() == data.child('fromUid').val() && newData.child('fromUsername').val() == data.child('fromUsername').val() && newData.child('toUid').val() == data.child('toUid').val() && newData.child('toUsername').val() == data.child('toUsername').val() && newData.child('createdAt').val() == data.child('createdAt').val() && (newData.child('status').val() == 'accepted' || newData.child('status').val() == 'rejected') && newData.child('reviewedAt').isNumber()) || (auth.uid == $recipientUid && data.child('status').val() == 'accepted' && newData.child('status').val() == 'accepted' && newData.child('fromUid').val() == data.child('fromUid').val() && newData.child('fromUsername').val() == data.child('fromUsername').val() && newData.child('toUid').val() == data.child('toUid').val() && newData.child('toUsername').val() == data.child('toUsername').val() && newData.child('createdAt').val() == data.child('createdAt').val() && newData.child('reviewedAt').val() == data.child('reviewedAt').val()))",
+          ".validate": "newData.hasChildren(['fromUid', 'fromUsername', 'toUid', 'toUsername', 'status', 'createdAt']) && (newData.child('status').val() == 'pending' && !newData.child('reviewedAt').exists() || (newData.child('status').val() == 'accepted' || newData.child('status').val() == 'rejected') && newData.child('reviewedAt').isNumber()) && newData.child('fromUid').val() == $requesterUid && newData.child('toUid').val() == $recipientUid && newData.child('fromUsername').val() == root.child('publicProfiles').child($requesterUid).child('username').val() && newData.child('toUsername').val() == root.child('publicProfiles').child($recipientUid).child('username').val() && newData.child('createdAt').isNumber()",
+          "fromUid": {
+            ".validate": "newData.isString()"
+          },
+          "fromUsername": {
+            ".validate": "newData.isString()"
+          },
+          "toUid": {
+            ".validate": "newData.isString()"
+          },
+          "toUsername": {
+            ".validate": "newData.isString()"
+          },
+          "status": {
+            ".validate": "newData.isString()"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "reviewedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "friends": {
+      "$uid": {
+        ".read": "auth != null && auth.token.email_verified == true && auth.uid == $uid",
+        "$friendUid": {
+          ".write": "auth != null && auth.token.email_verified == true && ((!newData.exists() && (auth.uid == $uid || auth.uid == $friendUid)) || (newData.exists() && (auth.uid == $uid || auth.uid == $friendUid) && (root.child('friendRequests').child($uid).child($friendUid).child('status').val() == 'accepted' || root.child('friendRequests').child($friendUid).child($uid).child('status').val() == 'accepted')))",
+          ".validate": "newData.hasChildren(['uid', 'username', 'since']) && newData.child('uid').val() == $friendUid && newData.child('username').isString() && newData.child('username').val().length > 0 && newData.child('username').val().length <= 80 && newData.child('since').isNumber()",
+          "uid": {
+            ".validate": "newData.isString()"
+          },
+          "username": {
+            ".validate": "newData.isString()"
+          },
+          "since": {
+            ".validate": "newData.isNumber()"
+          }
         }
       }
     },
@@ -26,7 +122,40 @@
         ".read": "auth != null && (auth.uid == $uid || (auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true))",
         "$locationId": {
           ".write": "auth != null && ((auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true) || (auth.token.email_verified == true && auth.uid == $uid && newData.child('userId').val() == $uid && newData.child('locationId').val() == $locationId && (!data.exists() || data.child('status').val() == 'rejected') && newData.child('status').val() == 'pending' && root.child('locations').child($locationId).child('ownerUid').val() == null))",
-          ".validate": "newData.hasChildren(['userId', 'email', 'username', 'locationId', 'locationName', 'city', 'status', 'submittedAt']) && (newData.child('status').val() == 'pending' && newData.numChildren() == 8 && !newData.child('reviewedAt').exists() && !newData.child('reviewedBy').exists() || (newData.child('status').val() == 'approved' || newData.child('status').val() == 'rejected') && newData.numChildren() == 10 && newData.child('reviewedAt').isNumber() && newData.child('reviewedBy').isString()) && newData.child('userId').val() == $uid && (newData.child('email').val() == data.child('email').val() || newData.child('email').val() == auth.token.email) && newData.child('username').isString() && newData.child('username').val().length > 0 && newData.child('username').val().length <= 80 && newData.child('locationId').val() == $locationId && root.child('locations').child($locationId).exists() && newData.child('locationName').val() == root.child('locations').child($locationId).child('name').val() && newData.child('city').val() == root.child('locations').child($locationId).child('city').val() && newData.child('submittedAt').isNumber()"
+          ".validate": "newData.hasChildren(['userId', 'email', 'username', 'locationId', 'locationName', 'city', 'status', 'submittedAt']) && (newData.child('status').val() == 'pending' && !newData.child('reviewedAt').exists() && !newData.child('reviewedBy').exists() || (newData.child('status').val() == 'approved' || newData.child('status').val() == 'rejected') && newData.child('reviewedAt').isNumber() && newData.child('reviewedBy').isString()) && newData.child('userId').val() == $uid && (newData.child('email').val() == data.child('email').val() || newData.child('email').val() == auth.token.email) && newData.child('username').isString() && newData.child('username').val().length > 0 && newData.child('username').val().length <= 80 && newData.child('locationId').val() == $locationId && root.child('locations').child($locationId).exists() && newData.child('locationName').val() == root.child('locations').child($locationId).child('name').val() && newData.child('city').val() == root.child('locations').child($locationId).child('city').val() && newData.child('submittedAt').isNumber()",
+          "userId": {
+            ".validate": "newData.isString()"
+          },
+          "email": {
+            ".validate": "newData.isString()"
+          },
+          "username": {
+            ".validate": "newData.isString()"
+          },
+          "locationId": {
+            ".validate": "newData.isString()"
+          },
+          "locationName": {
+            ".validate": "newData.isString()"
+          },
+          "city": {
+            ".validate": "newData.isString()"
+          },
+          "status": {
+            ".validate": "newData.isString()"
+          },
+          "submittedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "reviewedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "reviewedBy": {
+            ".validate": "newData.isString()"
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       }
     },

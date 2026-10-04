@@ -108,6 +108,10 @@ La autentificare, dacă profilul `users/{UID}` lipsește, aplicația îl creeaz�
 
 Pagina **Profil** afișează starea contului din Firebase Authentication; nu cere citirea profilului din Realtime Database doar pentru a afișa emailul autentificat.
 
+### Prieteni
+
+Utilizatorii cu email confirmat pot căuta un username exact, trimite cereri și accepta/refuza cereri primite. Căutarea citește o singură cheie codificată din `usernameIndex`, nu interoghează sau descarcă lista de profiluri; indexul nu poate fi enumerat printr-o citire la rădăcină, iar rezervarea lui este unică. Profilurile publice conțin numai username-ul și cheia sa normalizată (`publicProfiles/{UID}`); emailurile nu sunt expuse în căutare. Lista de prieteni și cererile sunt sincronizate în timp real prin Realtime Database, iar badge-ul din navigație indică cererile primite. Conturile vechi primesc profil public și index la autentificarea cu email confirmat. După orice schimbare a regulilor, publică `database.rules.json` folosind pasul 3 de mai sus.
+
 Cele 90 de locații sunt afișate ca puncte cyan grupate pe hartă; la încărcare, harta se încadrează pe toate cele nouă orașe, iar apăsarea/hover-ul arată informațiile locației. Evenimentele aprobate afișează descrierea în popup. `events.json` este gol, astfel încât evenimentele demonstrative verzi să nu mai apară pe hartă. Utilizatorii cu email confirmat pot trimite cereri de owner către administratori; cererile și deciziile se actualizează în timp real. La aprobare, utilizatorul primește rolul **Owner**, vizibil în profil, pentru locația respectivă și poate aproba sau respinge evenimentele trimise acolo. Administratorii văd și decid cererile în secțiunea **Solicitări de owner** din meniul **Cont**.
 
 ## Date demo și limite
