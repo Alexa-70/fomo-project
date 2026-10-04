@@ -6,7 +6,7 @@ Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă
 
 1. Deschide PowerShell în folderul proiectului.
 2. Pornește backendul:
-
+//matamata 
 ```powershell
 .\start.ps1
 ```
