@@ -9,8 +9,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-<!-- Stilul obligatoriu pentru harta OpenFreeMap (din gnt_branch) -->
-<link rel="stylesheet" href="https://unpkg.com" />
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
 
 <!-- Noua temă vizuală pentru hartă (din gnt_branch) -->
 <link rel="stylesheet" href="./styles.css?v=clean-orange-map-v2" />
@@ -24,7 +23,7 @@
 
 <!-- Stiluri adiționale unice din main care trebuie păstrate -->
 <link rel="stylesheet" href="./styles.css?v=floating-v1" />
-<link rel="stylesheet" href="./styles.css?v=location-tooltips-and-pins-v1" />
+<link rel="stylesheet" href="./styles.css?v=location-popup-tooltip-fix-v1" />
 
     <link rel="stylesheet" href="./settings-panel.css" />
     <link rel="stylesheet" href="./event-workflow.css" />
@@ -310,10 +309,12 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+    <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/dist/leaflet-maplibre-gl.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
-    <script src="./app.js?v=clean-orange-map-v2"></script>
+    <script src="./app.js?v=map-merge-fix-v4"></script>
     <script src="./settings-panel.js"></script>
     <script src="./firebase-config.js"></script>
     <script src="./firebase-client.js?v=location-photo-catalog-v1"></script>
@@ -321,8 +322,6 @@
     <script src="./account-panel.js?v=profile-repair-v1"></script>
     <script src="./route-planner.js?v=warm-map-theme-v1"></script>
     <script src="./ride-sharing.js?v=ridesharing-v1"></script>
-    <script src="./buttons-ui/buttons-ui.js?v=profile-auth-status-v3"></script>
-    <script src="./route-planner.js"></script>
     <script src="./buttons-ui/buttons-ui.js?v=firebase-friends-v5"></script>
     <script src="./ai-assistant.js"></script>
   </body>
