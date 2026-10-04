@@ -514,6 +514,33 @@ h1 {
   font-size: 10px;
 }
 
+.event-travel-times,
+.map-popup-travel-times {
+  color: var(--accent-deep);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.event-travel-times {
+  margin-top: 2px;
+}
+
+.travel-mode-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.travel-mode-button:hover,
+.travel-mode-button:focus-visible {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .event-actions { margin-top: 10px; }
 
 .vote-button, .event-route-button {
@@ -724,6 +751,12 @@ h1 {
 .map-popup .map-popup-description {
   white-space: normal;
   line-height: 1.45;
+}
+
+.map-popup .map-popup-travel-times {
+  margin-top: 3px;
+  color: var(--accent-deep);
+  font-weight: 700;
 }
 
 .map-popup .popup-action {

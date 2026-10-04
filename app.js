@@ -66,6 +66,15 @@ let userLocation = null;
 let userLocationMarker = null;
 let userLocationZoom = null;
 let eventMarkers = new Map();
+const travelTimeCache = new Map();
+const travelTimePending = new Map();
+const travelTimeErrors = new Map();
+const travelTimeElements = new Map();
+const TRAVEL_MODES = [
+  { key: "WALKING", icon: "🚶" },
+  { key: "TRANSIT", icon: "🚌" },
+  { key: "DRIVING", icon: "🚗" },
+];
 const locationLayer = L.markerClusterGroup({
   showCoverageOnHover: false,
   spiderfyOnMaxZoom: true,
@@ -114,6 +123,209 @@ function formatDuration(seconds) {
   const remainingMinutes = minutes % 60;
   if (hours === 0) return `${minutes} min`;
   return remainingMinutes ? `${hours} h ${remainingMinutes} min` : `${hours} h`;
+}
+
+function getTravelOrigin() {
+  return origin;
+}
+
+function getTravelTimeCacheKey(event, start) {
+  return [
+    start.latitude,
+    start.longitude,
+    event.latitude,
+    event.longitude,
+  ].map((coordinate) => Number(coordinate).toFixed(6)).join(":");
+}
+
+function formatTravelTimeSummary(travelTimes) {
+  return TRAVEL_MODES.map(({ key, icon }) => {
+    const seconds = travelTimes[key];
+    const duration = Number.isFinite(seconds)
+      ? formatDuration(Math.max(60, seconds))
+      : "—";
+    return `${icon} ${duration}`;
+  }).join(" | ");
+}
+
+function renderTravelTimeElement(event, element, isPopup = false) {
+  const start = getTravelOrigin();
+  const cacheKey = getTravelTimeCacheKey(event, start);
+  const travelTimes = travelTimeCache.get(cacheKey);
+  const error = travelTimeErrors.get(cacheKey) || "";
+  element.replaceChildren();
+  element.title = error;
+
+  if (!travelTimes) {
+    element.textContent = getTravelTimeLabel(event);
+    return;
+  }
+
+  if (isPopup) {
+    element.textContent = formatTravelTimeSummary(travelTimes);
+    return;
+  }
+
+  for (const { key, icon } of TRAVEL_MODES) {
+    const seconds = travelTimes[key];
+    const duration = Number.isFinite(seconds)
+      ? formatDuration(Math.max(60, seconds))
+      : "—";
+    const button = createElement("button", "travel-mode-button", `${icon} ${duration}`);
+    button.type = "button";
+    button.setAttribute("aria-label", `Arată ruta ${key === "WALKING" ? "pe jos" : key === "TRANSIT" ? "cu transportul în comun" : "cu mașina"}`);
+    button.title = `Arată ruta: ${button.getAttribute("aria-label").replace("Arată ruta ", "")}`;
+    button.addEventListener("click", async (clickEvent) => {
+      clickEvent.stopPropagation();
+      await window.FomoRoutePlanner.showRoute(event, key);
+    });
+    element.append(button);
+    if (key !== TRAVEL_MODES[TRAVEL_MODES.length - 1].key) {
+      element.append(document.createTextNode(" | "));
+    }
+  }
+}
+
+function getTravelTimeLabel(event) {
+  const start = getTravelOrigin();
+  if (!Number.isFinite(Number(start.latitude)) || !Number.isFinite(Number(start.longitude))) {
+    return "Setează o locație pentru estimarea timpilor.";
+  }
+  const cacheKey = getTravelTimeCacheKey(event, start);
+  if (travelTimeCache.has(cacheKey)) {
+    return formatTravelTimeSummary(travelTimeCache.get(cacheKey));
+  }
+  if (travelTimeErrors.has(cacheKey)) {
+    return "Timpii de deplasare nu sunt disponibili.";
+  }
+  return "Se calculează timpii de deplasare...";
+}
+
+function registerTravelTimeElement(event, element, isPopup = false) {
+  let entry = travelTimeElements.get(event.id);
+  if (!entry) {
+    entry = { cardElements: new Set(), popupElement: null };
+    travelTimeElements.set(event.id, entry);
+  }
+  if (isPopup) entry.popupElement = element;
+  else entry.cardElements.add(element);
+
+  renderTravelTimeElement(event, element, isPopup);
+}
+
+function updateTravelTimeElements(event) {
+  const entry = travelTimeElements.get(event.id);
+  if (!entry) return;
+  for (const element of entry.cardElements) {
+    renderTravelTimeElement(event, element);
+  }
+  if (entry.popupElement) {
+    renderTravelTimeElement(event, entry.popupElement, true);
+  }
+}
+
+function requestDistanceMatrix(start, destinations, mode) {
+  if (!window.google?.maps?.DistanceMatrixService || !window.google.maps.TravelMode) {
+    throw new Error("Serviciul Google Maps Distance Matrix nu este disponibil. Verifică încărcarea SDK-ului și configurarea API-ului.");
+  }
+
+  const service = new google.maps.DistanceMatrixService();
+  return new Promise((resolve, reject) => {
+    service.getDistanceMatrix({
+      origins: [{ lat: Number(start.latitude), lng: Number(start.longitude) }],
+      destinations: destinations.map((event) => ({
+        lat: Number(event.latitude),
+        lng: Number(event.longitude),
+      })),
+      travelMode: google.maps.TravelMode[mode.key],
+      unitSystem: google.maps.UnitSystem.METRIC,
+    }, (response, status) => {
+      if (status !== google.maps.DistanceMatrixStatus.OK) {
+        reject(new Error(`Google Maps nu a putut calcula durata ${mode.key}: ${status}.`));
+        return;
+      }
+
+      const elements = response?.rows?.[0]?.elements;
+      if (!Array.isArray(elements) || elements.length !== destinations.length) {
+        reject(new Error(`Google Maps a întors un răspuns incomplet pentru modul ${mode.key}.`));
+        return;
+      }
+      resolve(elements.map((element) =>
+        element.status === "OK" && Number.isFinite(element.duration?.value)
+          ? element.duration.value
+          : null
+      ));
+    });
+  });
+}
+
+async function calculateTravelTimeBatch(records, start) {
+  try {
+    const modeResults = await Promise.all(TRAVEL_MODES.map((mode) =>
+      requestDistanceMatrix(start, records.map((record) => record.event), mode)
+    ));
+    records.forEach((record, index) => {
+      const times = Object.fromEntries(TRAVEL_MODES.map((mode, modeIndex) => [
+        mode.key,
+        modeResults[modeIndex][index],
+      ]));
+      travelTimeCache.set(record.cacheKey, times);
+      travelTimeErrors.delete(record.cacheKey);
+      travelTimePending.delete(record.cacheKey);
+      record.resolve(times);
+      updateTravelTimeElements(record.event);
+    });
+  } catch (error) {
+    for (const record of records) {
+      travelTimeErrors.set(record.cacheKey, error.message);
+      travelTimePending.delete(record.cacheKey);
+      record.reject(error);
+      updateTravelTimeElements(record.event);
+    }
+  }
+}
+
+function ensureTravelTimes(targetEvents, start) {
+  const pendingPromises = [];
+  const missingRecords = [];
+  for (const event of targetEvents) {
+    const cacheKey = getTravelTimeCacheKey(event, start);
+    if (travelTimeCache.has(cacheKey)) continue;
+    const existingRequest = travelTimePending.get(cacheKey);
+    if (existingRequest) {
+      pendingPromises.push(existingRequest);
+      continue;
+    }
+
+    let resolve;
+    let reject;
+    const promise = new Promise((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    });
+    travelTimePending.set(cacheKey, promise);
+    travelTimeErrors.delete(cacheKey);
+    missingRecords.push({ event, cacheKey, resolve, reject });
+    pendingPromises.push(promise);
+    updateTravelTimeElements(event);
+  }
+
+  for (let index = 0; index < missingRecords.length; index += 25) {
+    void calculateTravelTimeBatch(missingRecords.slice(index, index + 25), start);
+  }
+  return Promise.all(pendingPromises);
+}
+
+async function refreshTravelTimes(targetEvents = events) {
+  const start = getTravelOrigin();
+  if (!Number.isFinite(Number(start.latitude)) || !Number.isFinite(Number(start.longitude))) {
+    return;
+  }
+  try {
+    await ensureTravelTimes(targetEvents, start);
+  } catch (error) {
+    setStatus(error.message || "Nu am putut calcula timpii de deplasare.", "error");
+  }
 }
 
 async function apiRequest(path, options = {}) {
@@ -190,7 +402,9 @@ function createEventMarker(event) {
   popup.className = "map-popup";
   const title = createElement("strong", "", event.title);
   const venue = createElement("span", "", event.venue);
-  popup.append(title, venue);
+  const travelTimes = createElement("span", "map-popup-travel-times");
+  registerTravelTimeElement(event, travelTimes, true);
+  popup.append(title, venue, travelTimes);
   if (event.description) {
     popup.append(createElement("span", "map-popup-description", event.description));
   }
@@ -287,6 +501,9 @@ function createEventCard(event) {
     createElement("span", "", `${formatEventDate(event.startsAt)}`),
     createElement("span", "", event.venue),
   );
+  const travelTimes = createElement("div", "event-travel-times");
+  registerTravelTimeElement(event, travelTimes);
+  details.append(travelTimes);
   if (communityEvent && (event.proposerName || event.activity)) {
     const communityMeta = createElement("div", "event-community-meta", `${event.proposerName || "Comunitate"} • ${event.activity || "activitate spontană"}`);
     details.append(communityMeta);
@@ -322,17 +539,23 @@ function createEventCard(event) {
     }
   });
 
-  const routeButton = createElement("button", "event-route-button", "Cum ajung? ↗");
+  const routeButton = createElement("button", "event-route-button", "Arată rută ↗");
   routeButton.type = "button";
   routeButton.addEventListener("click", async (clickEvent) => {
     clickEvent.stopPropagation();
+    document.querySelectorAll(".event-route-button, .travel-mode-button").forEach((button) => {
+      button.disabled = true;
+    });
     selectEvent(event.id, false);
-    await window.FomoRoutePlanner.showRoute(event);
+    await window.FomoRoutePlanner.showRoute(event, "WALKING");
   });
   if (event.source !== "community") actions.append(voteButton);
   actions.append(routeButton);
   card.append(heading, title, description, details, actions);
-  card.addEventListener("click", () => selectEvent(event.id, true));
+  card.addEventListener("click", async () => {
+    selectEvent(event.id, true);
+    await window.FomoRoutePlanner.showRoute(event, "WALKING");
+  });
   return card;
 }
 
@@ -391,6 +614,9 @@ function renderEvents() {
   const filteredEvents = getFilteredEvents();
   const communityEvents = getCommunityEvents();
   const visibleIds = new Set(filteredEvents.map((event) => event.id));
+  for (const entry of travelTimeElements.values()) {
+    entry.cardElements.clear();
+  }
 
   if (selectedEventId && !visibleIds.has(selectedEventId) && !communityEvents.some((event) => event.id === selectedEventId)) {
     selectedEventId = null;
@@ -527,6 +753,7 @@ async function loadEvents() {
   for (const marker of eventMarkers.values()) map.removeLayer(marker);
   eventMarkers = new Map(events.map((event) => [event.id, createEventMarker(event)]));
   renderEvents();
+  void refreshTravelTimes();
   if (events.length && !userLocation) {
     const bounds = L.latLngBounds(events.map((event) => [event.latitude, event.longitude]));
     map.fitBounds(bounds.pad(0.2), { maxZoom: 14 });
@@ -554,6 +781,7 @@ function showSuggestions(results) {
       originInput.value = result.displayName;
       originInput.dataset.selectedQuery = result.displayName;
       origin = { latitude: Number(result.latitude), longitude: Number(result.longitude) };
+      refreshTravelTimes();
       originHint.textContent = "Punct de plecare selectat";
       hideSuggestions();
       setStatus("Locația de plecare a fost actualizată.", "success");
@@ -637,6 +865,7 @@ function locateUser(isAutomatic = false) {
       }
       updateRecenterButton();
       setStatus("Locația ta a fost setată ca punct de plecare.", "success");
+      void refreshTravelTimes();
     },
     (error) => {
       locateButton.disabled = false;
@@ -671,8 +900,20 @@ window.FomoRouteContext = {
   getEventMarker: (eventId) => eventMarkers.get(eventId),
   setOrigin: (nextOrigin) => {
     origin = nextOrigin;
+    void refreshTravelTimes();
   },
   setStatus,
+};
+
+window.FomoTravelTimes = {
+  forEvent: async (event, start = getTravelOrigin()) => {
+    const cacheKey = getTravelTimeCacheKey(event, start);
+    if (travelTimeCache.has(cacheKey)) return travelTimeCache.get(cacheKey);
+    await ensureTravelTimes([event], start);
+    return travelTimeCache.get(cacheKey);
+  },
+  refresh: refreshTravelTimes,
+  format: formatTravelTimeSummary,
 };
 
 categoryFilterButtons.forEach((button) => {
@@ -693,6 +934,7 @@ window.FomoRefreshCommunityEvents = (communityEvents) => {
   for (const marker of eventMarkers.values()) map.removeLayer(marker);
   eventMarkers = new Map(events.map((event) => [event.id, createEventMarker(event)]));
   renderEvents();
+  void refreshTravelTimes();
 };
 
 window.FomoSetLocations = setMapLocations;

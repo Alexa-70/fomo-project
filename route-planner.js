@@ -3,6 +3,17 @@
   let routeLayer = null;
   let startMarker = null;
   let destinationMarker = null;
+  let routeRequestId = 0;
+  const routeStyles = {
+    WALKING: { color: "#2f9e64", weight: 6, opacity: 0.92, dashArray: "8 7", lineCap: "round", lineJoin: "round" },
+    TRANSIT: { color: "#3678db", weight: 6, opacity: 0.92, lineCap: "round", lineJoin: "round" },
+    DRIVING: { color: "#e58a24", weight: 6, opacity: 0.92, lineCap: "round", lineJoin: "round" },
+  };
+  const routeLabels = {
+    WALKING: "pe jos",
+    TRANSIT: "cu transportul în comun",
+    DRIVING: "cu mașina",
+  };
 
   function createMarkerIcon(label, isDestination = false) {
     return L.divIcon({
@@ -52,32 +63,70 @@
     destinationMarker = null;
   }
 
-  async function showRoute(event) {
-    context.setStatus(`Calculăm traseul către ${event.title}...`);
+  function getDirections(start, event, mode) {
+    if (!window.google?.maps?.DirectionsService || !window.google.maps.TravelMode) {
+      throw new Error("Google Maps DirectionsService nu este disponibil. Verifică încărcarea SDK-ului.");
+    }
+    if (!routeStyles[mode]) {
+      throw new Error(`Mod de transport necunoscut: ${mode}.`);
+    }
+
+    const service = new google.maps.DirectionsService();
+    const request = {
+      origin: { lat: Number(start.latitude), lng: Number(start.longitude) },
+      destination: { lat: Number(event.latitude), lng: Number(event.longitude) },
+      travelMode: google.maps.TravelMode[mode],
+      unitSystem: google.maps.UnitSystem.METRIC,
+    };
+    if (mode === "TRANSIT") {
+      request.transitOptions = { departureTime: new Date() };
+    }
+
+    return new Promise((resolve, reject) => {
+      service.route(request, (result, status) => {
+        if (status !== google.maps.DirectionsStatus.OK) {
+          const reason = status === "REQUEST_DENIED"
+            ? "Activează Directions API (Legacy) în proiectul Google Maps folosit de aplicație."
+            : `Google Maps a răspuns cu statusul ${status}.`;
+          reject(new Error(`Nu s-a putut calcula ruta ${routeLabels[mode]}. ${reason}`));
+          return;
+        }
+        const route = result?.routes?.[0];
+        const leg = route?.legs?.[0];
+        if (!route?.overview_path?.length || !leg?.distance || !leg?.duration) {
+          reject(new Error("Google Maps a întors un traseu incomplet."));
+          return;
+        }
+        resolve({
+          coordinates: route.overview_path.map((point) => [point.lat(), point.lng()]),
+          distanceMeters: leg.distance.value,
+          durationSeconds: leg.duration.value,
+        });
+      });
+    });
+  }
+
+  async function showRoute(event, mode = "WALKING") {
+    const requestId = ++routeRequestId;
+    if (!routeStyles[mode]) {
+      context.setStatus(`Mod de transport necunoscut: ${mode}.`, "error");
+      return null;
+    }
+
+    context.setStatus(`Calculăm ruta ${routeLabels[mode]} către ${event.title}...`);
     context.mapHint.textContent = "Se calculează traseul...";
-    document.querySelectorAll(".event-route-button").forEach((button) => {
+    document.querySelectorAll(".event-route-button, .travel-mode-button").forEach((button) => {
       button.disabled = true;
     });
 
     try {
       const start = await resolveOrigin();
-      const route = await context.apiRequest("/api/routes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          origin: start,
-          destination: {
-            latitude: Number(event.latitude),
-            longitude: Number(event.longitude),
-          },
-        }),
-      });
+      const route = await getDirections(start, event, mode);
+      if (requestId !== routeRequestId) return null;
 
       clearRoute();
       context.clearRoute();
-      routeLayer = L.geoJSON(route.geometry, {
-        style: { color: "#b5dc38", weight: 6, opacity: 0.92, lineCap: "round", lineJoin: "round" },
-      }).addTo(context.map);
+      routeLayer = L.polyline(route.coordinates, routeStyles[mode]).addTo(context.map);
       startMarker = L.marker([start.latitude, start.longitude], {
         icon: createMarkerIcon("A"),
       }).addTo(context.map);
@@ -89,24 +138,26 @@
       context.map.fitBounds(bounds.pad(0.16), { maxZoom: 15 });
       const distance = context.formatDistance(route.distanceMeters);
       const duration = context.formatDuration(route.durationSeconds);
-      context.mapHint.textContent = `${distance} · ${duration} până la eveniment`;
-      context.setStatus(`Traseu către „${event.title}”: ${distance}, aproximativ ${duration}.`, "success");
-
-      const eventMarker = context.getEventMarker(event.id);
-      if (eventMarker) eventMarker.closePopup();
+      const modeIcon = mode === "WALKING" ? "🚶" : mode === "TRANSIT" ? "🚌" : "🚗";
+      context.mapHint.textContent = `${distance} · ${modeIcon} ${duration}`;
+      context.setStatus(`Rută către „${event.title}” ${routeLabels[mode]}: ${distance}, ${duration}.`, "success");
       return {
         distanceMeters: route.distanceMeters,
         durationSeconds: route.durationSeconds,
-        steps: route.steps,
+        mode,
+        coordinates: route.coordinates,
       };
     } catch (error) {
+      if (requestId !== routeRequestId) return null;
       context.mapHint.textContent = `${event.title} · ${event.venue}`;
-      context.setStatus(error.message || "Nu am putut calcula traseul.", "error");
+      context.setStatus(error instanceof Error ? error.message : String(error), "error");
       return null;
     } finally {
-      document.querySelectorAll(".event-route-button").forEach((button) => {
-        button.disabled = false;
-      });
+      if (requestId === routeRequestId) {
+        document.querySelectorAll(".event-route-button, .travel-mode-button").forEach((button) => {
+          button.disabled = false;
+        });
+      }
     }
   }
 
