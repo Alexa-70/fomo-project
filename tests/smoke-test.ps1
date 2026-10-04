@@ -60,12 +60,38 @@ try {
     throw "Endpointul /health a întors un status neașteptat."
   }
 
-  $response = Invoke-RestMethod -Uri "$baseUrl/api/events" -TimeoutSec 5
-  $eventResults = @($response.events)
-  if ($eventResults.Count -eq 0) {
-    throw "Endpointul /api/events nu a întors niciun eveniment."
+  foreach ($asset in @("firebase-config.js", "firebase-client.js", "account-panel.js", "account-panel.css", "event-workflow.js", "locations.json", "database.rules.json")) {
+    $assetResponse = Invoke-WebRequest -Uri "$baseUrl/$asset" -UseBasicParsing -TimeoutSec 5
+    if ($assetResponse.StatusCode -ne 200) {
+      throw "Resursa statică '$asset' nu a fost servită cu statusul 200."
+    }
   }
 
+  $databaseRules = Get-Content -LiteralPath (Join-Path $projectRoot "database.rules.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+  $ownerRequestRule = $databaseRules.rules.ownerRequests
+  $ownerRequestValidation = $ownerRequestRule.'$uid'.'$locationId'.'.validate'
+  if ($ownerRequestValidation -notmatch "newData\.numChildren\(\) == 8" -or
+    $ownerRequestValidation -notmatch "newData\.numChildren\(\) == 10" -or
+    $null -ne $ownerRequestRule.'$uid'.'$locationId'.'$other') {
+    throw "Regulile cererilor de owner nu permit schema validă sau permit câmpuri nevalidate."
+  }
+
+  $locations = ConvertFrom-Json -InputObject (Get-Content -LiteralPath (Join-Path $projectRoot "locations.json") -Raw -Encoding UTF8)
+  if ($locations.Count -ne 90) {
+    throw "Catalogul trebuie să conțină 90 de locații."
+  }
+  $cityGroups = @($locations | Group-Object -Property city)
+  if ($cityGroups.Count -ne 9) {
+    throw "Catalogul trebuie să conțină exact 9 orașe."
+  }
+  foreach ($cityGroup in $cityGroups) {
+    if ($cityGroup.Count -ne 10) {
+      throw "Orașul '$($cityGroup.Name)' trebuie să aibă exact 10 locații, nu $($cityGroup.Count)."
+    }
+  }
+
+  $response = Invoke-RestMethod -Uri "$baseUrl/api/events" -TimeoutSec 5
+  $eventResults = @($response.events)
   $requiredFields = @(
     "id", "title", "category", "description", "venue",
     "startsAt", "latitude", "longitude", "tier", "votes", "votedByMe"
@@ -78,7 +104,7 @@ try {
     }
   }
 
-  Write-Output "Smoke test passed: /health and /api/events responded correctly ($($eventResults.Count) events)."
+  Write-Output "Smoke test passed: API, Firebase assets, empty demo event catalog and 90 seeded locations are valid."
 }
 finally {
   if ($null -ne $serverProcess -and -not $serverProcess.HasExited) {

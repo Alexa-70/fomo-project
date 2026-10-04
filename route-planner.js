@@ -94,9 +94,15 @@
 
       const eventMarker = context.getEventMarker(event.id);
       if (eventMarker) eventMarker.closePopup();
+      return {
+        distanceMeters: route.distanceMeters,
+        durationSeconds: route.durationSeconds,
+        steps: route.steps,
+      };
     } catch (error) {
       context.mapHint.textContent = `${event.title} · ${event.venue}`;
       context.setStatus(error.message || "Nu am putut calcula traseul.", "error");
+      return null;
     } finally {
       document.querySelectorAll(".event-route-button").forEach((button) => {
         button.disabled = false;

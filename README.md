@@ -3,12 +3,12 @@
 Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar aplicația calculează drumul către evenimentul ales. Interfața folosește Leaflet și OpenStreetMap; backendul PowerShell oferă lista de evenimente și voturi, caută locații cu Nominatim și calculează rute auto cu OSRM.
 
 Navigarea este în bara de jos: **Acasă** afișează harta, iar **Funcții** deschide descoperirea evenimentelor, setările și instrumentele comunității. Codul barei de navigare este în `buttons-ui/`.
+Aplicație pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar aplicația calculează drumul către evenimentul ales. Interfața folosește Leaflet, MapLibre GL JS și stilul vectorial Bright de la OpenFreeMap (date OpenStreetMap). Backendul PowerShell caută locații cu Nominatim și calculează rute auto cu OSRM; Firebase Authentication și Realtime Database gestionează conturile, locațiile, cererile de owner și aprobarea evenimentelor.
 
 ## Pornire în Windows
 
 1. Deschide PowerShell în folderul proiectului.
 2. Pornește backendul:
-//matamata 
 ```powershell
 .\start.ps1
 ```
@@ -64,9 +64,50 @@ Primește coordonatele selectate:
 
 Răspunsul conține distanța, durata estimată, indicațiile și geometria GeoJSON `LineString` (coordonatele sunt perechi `[longitudine, latitudine]`). Interfața poate folosi locația browserului sau o adresă introdusă și afișează traseul până la evenimentul ales.
 
+Interacțiunea pentru alegerea originii, solicitarea traseului și desenarea acestuia pe hartă este izolată în `route-planner.js`. Utilizatorul poate apăsa „Folosește locația mea” pentru a permite accesul la locația browserului sau poate căuta o adresă; apoi butonul „Cum ajung?” calculează și afișează traseul către eveniment.
+
+### `POST /api/assistant`
+
+Trimite întrebarea și istoricul recent către asistentul Groq. Serverul adaugă evenimentele disponibile și preferințele selectate, iar răspunsul este `{ "reply": "..." }`. Pentru întrebări de traseu, interfața calculează ruta cu endpointul `/api/routes` și transmite către Groq doar rezumatul și indicațiile rutei; coordonatele exacte de plecare rămân în browser și la furnizorul de rutare.
+
+Comportamentul asistentului este ghidat prin instrucțiunile din `server.ps1`, nu prin reantrenarea modelului. Acesta poate recomanda evenimentele din context, explica funcțiile prototipului și interpreta traseul recent; nu poate actualiza voturi sau setări în locul utilizatorului și nu vede propunerile salvate doar în browser.
+
+Asistentul este disponibil din butonul „Întreabă FOMO”. Pentru a-l configura, setează cheia numai în sesiunea PowerShell în care pornești serverul:
+
+```powershell
+$env:GROQ_API_KEY = Read-Host "GROQ_API_KEY"
+$env:GROQ_MODEL = "openai/gpt-oss-120b"
+.\start.ps1
+```
+
+`GROQ_MODEL` este opțional și implicit este `openai/gpt-oss-120b`. Nu salva cheia în fișierele proiectului și nu o trimite din browser. Dacă cheia lipsește, endpointul întoarce `503`; dacă Groq nu răspunde, întoarce `502`.
+
+## Firebase: conturi, locații și moderare
+
+Conturile folosesc Firebase Authentication, iar profilurile, locațiile și evenimentele sunt stocate în **Firebase Realtime Database**. Configurația folosește planul Spark gratuit și nu depinde de Firestore, Cloud Functions sau facturarea Blaze. Regulile din `database.rules.json` limitează accesul la solicitările și evenimentele la utilizatorul care le-a trimis, ownerul aprobat al locației și administrator.
+
+Proiectul Web și ID-ul proiectului sunt deja setate în `firebase-config.js` și `.firebaserc`. Configurația Firebase Web este publică; nu pune parole sau chei service-account în cod.
+
+Pentru inițializare:
+
+1. În Firebase Console, Authentication → Sign-in method, activează **Email/Password**. În Authentication → Settings → Authorized domains, adaugă `localhost`.
+2. Instanța gratuită Realtime Database `fomo-68a85-default-rtdb` a fost creată în regiunea **United States (us-central1)**. URL-ul ei este `https://fomo-68a85-default-rtdb.firebaseio.com`, deja setat în `firebase-config.js`. Realtime Database este disponibil pe Spark; Cloud Functions și Blaze nu sunt folosite.
+3. Autentifică Firebase CLI și publică regulile Realtime Database:
+
+   ```powershell
+   npx --yes firebase-tools@latest deploy --only database --project fomo-68a85
+   ```
+
+4. Creează-ți contul prin aplicație și confirmă emailul. În Firebase Console → Authentication → Users copiază UID-ul acelui cont.
+5. În Realtime Database creează manual `admins/{UID}` cu valoarea booleană `true`. Aceasta este singura cale de a acorda administrator; aplicația publică nu permite promovarea utilizatorilor în admin.
+6. Deconectează-te și autentifică-te din nou. Catalogul celor 90 de locații este deja încărcat în Realtime Database; administratorul poate folosi butonul **Încarcă cele 90 de locații** din meniul **Cont** pentru a-l reîncărca, fără să înlocuiască ownerii existenți.
+7. Pornește backendul local cu `.\start.ps1` și accesează `http://localhost:5101/`.
+
+Cele 90 de locații sunt afișate ca puncte cyan grupate pe hartă; la încărcare, harta se încadrează pe toate cele nouă orașe, iar apăsarea/hover-ul arată informațiile locației. Evenimentele aprobate afișează descrierea în popup. `events.json` este gol, astfel încât evenimentele demonstrative verzi să nu mai apară pe hartă. Utilizatorii cu email confirmat pot trimite cereri de owner către administratori; cererile și deciziile se actualizează în timp real. La aprobare, utilizatorul primește rolul **Owner**, vizibil în profil, pentru locația respectivă și poate aproba sau respinge evenimentele trimise acolo. Administratorii văd și decid cererile în secțiunea **Solicitări de owner** din meniul **Cont**.
+
 ## Date demo și limite
 
-`events.json` conține evenimente demonstrative în Cluj-Napoca. Voturile anonime sunt identificate cu un ID păstrat în browser și nu reprezintă autentificare sigură; datele fișierelor locale sunt pentru prototip, nu pentru utilizare concurentă sau producție. Eticheta „Promovat” este doar o demonstrație a planului paid: nu există încă plăți, notificări push, conturi de organizator sau moderare. Acestea necesită autentificare, infrastructură de persistență și integrarea unui furnizor de plăți/notificări.
+`events.json` este gol; propunerile comunității aprobate sunt stocate în Realtime Database. Voturile rămân relevante doar pentru evenimentele demo viitoare. `locations.json` este catalogul inițial încărcat în Realtime Database. Coordonatele catalogului sunt orientative și trebuie verificate înainte de folosirea în producție. Aplicația web folosește în continuare backendul PowerShell local pentru căutarea adreselor și rutare; pentru publicare, aceste servicii trebuie găzduite separat.
 
 ## Configurare
 

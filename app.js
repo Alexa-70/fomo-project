@@ -60,8 +60,22 @@ let userLocation = null;
 let userLocationMarker = null;
 let userLocationZoom = null;
 let eventMarkers = new Map();
+const locationLayer = L.markerClusterGroup({
+  showCoverageOnHover: false,
+  spiderfyOnMaxZoom: true,
+  zoomToBoundsOnClick: true,
+  maxClusterRadius: 34,
+}).addTo(map);
+let hasFitLocationBounds = false;
+const locationCount = document.querySelector("#map-location-count");
 let searchTimer = null;
 let searchRequestId = 0;
+
+window.FomoAppContext = {
+  getEvents: () => events.map((event) => ({ ...event })),
+  getOrigin: () => ({ ...origin }),
+  getSelectedEventId: () => selectedEventId,
+};
 
 const voterId = (() => {
   const storageKey = "locally-voter-id";
@@ -132,11 +146,74 @@ function createEventMarker(event) {
   popup.className = "map-popup";
   const title = createElement("strong", "", event.title);
   const venue = createElement("span", "", event.venue);
-  const action = createElement("span", "popup-action", "Vezi evenimentul →");
-  popup.append(title, venue, action);
+  popup.append(title, venue);
+  if (event.description) {
+    popup.append(createElement("span", "map-popup-description", event.description));
+  }
+  popup.append(createElement("span", "popup-action", "Vezi evenimentul →"));
   marker.bindPopup(popup);
   marker.on("click", () => selectEvent(event.id, false));
   return marker;
+}
+
+function createLocationPopup(location) {
+  const popup = createElement("div", "map-popup");
+  popup.append(
+    createElement("strong", "", location.name),
+    createElement("span", "", location.city),
+    createElement("span", "", location.category),
+  );
+  const upcomingEvents = events
+    .filter((event) => event.source === "community" && event.locationId === location.id)
+    .sort((left, right) => new Date(left.startsAt) - new Date(right.startsAt));
+  for (const event of upcomingEvents) {
+    popup.append(
+      createElement("strong", "map-popup-event-title", event.title),
+      createElement("span", "", formatEventDate(event.startsAt)),
+    );
+    if (event.description) {
+      popup.append(createElement("span", "map-popup-description", event.description));
+    }
+  }
+  if (!upcomingEvents.length) {
+    popup.append(createElement("span", "map-popup-description", "Nu există evenimente verificate la această locație."));
+  }
+  return popup;
+}
+
+function setMapLocations(locations) {
+  locationLayer.clearLayers();
+  const validLocations = locations.filter((location) =>
+    Number.isFinite(Number(location.latitude)) &&
+    Number.isFinite(Number(location.longitude)) &&
+    Number(location.latitude) >= -90 &&
+    Number(location.latitude) <= 90 &&
+    Number(location.longitude) >= -180 &&
+    Number(location.longitude) <= 180
+  );
+
+  for (const location of validLocations) {
+    const marker = L.circleMarker(
+      [Number(location.latitude), Number(location.longitude)],
+      { radius: 7, className: "location-map-marker", fillColor: "#5cc9dc", fillOpacity: 0.92, color: "#10202b", weight: 2.5 },
+    );
+    marker.bindPopup(() => createLocationPopup(location));
+    marker.bindTooltip(location.name, { direction: "top", offset: [0, -7], sticky: true });
+    marker.on("click", () => {
+      mapHint.textContent = `${location.name} · ${location.city}`;
+    });
+    locationLayer.addLayer(marker);
+  }
+
+  const cities = new Set(validLocations.map((location) => location.city));
+  locationCount.textContent = `${validLocations.length} locații · ${cities.size} orașe`;
+  if (!hasFitLocationBounds && validLocations.length) {
+    hasFitLocationBounds = true;
+    map.fitBounds(
+      L.latLngBounds(validLocations.map((location) => [Number(location.latitude), Number(location.longitude)])).pad(0.08),
+      { maxZoom: 7 },
+    );
+  }
 }
 
 function createEventCard(event) {
@@ -198,7 +275,8 @@ function createEventCard(event) {
     selectEvent(event.id, false);
     await window.FomoRoutePlanner.showRoute(event);
   });
-  actions.append(voteButton, routeButton);
+  if (event.source !== "community") actions.append(voteButton);
+  actions.append(routeButton);
   card.append(heading, title, description, details, actions);
   card.addEventListener("click", () => selectEvent(event.id, true));
   return card;
@@ -301,7 +379,8 @@ function matchesEventCategory(category, filter) {
 
 async function loadEvents() {
   const data = await apiRequest(`/api/events?voterId=${encodeURIComponent(voterId)}`);
-  events = data.events;
+  const communityEvents = events.filter((event) => event.source === "community");
+  events = data.events.concat(communityEvents);
   for (const marker of eventMarkers.values()) map.removeLayer(marker);
   eventMarkers = new Map(events.map((event) => [event.id, createEventMarker(event)]));
   renderEvents();
@@ -452,6 +531,15 @@ window.FomoRouteContext = {
   },
   setStatus,
 };
+
+window.FomoRefreshCommunityEvents = (communityEvents) => {
+  events = events.filter((event) => event.source !== "community").concat(communityEvents);
+  for (const marker of eventMarkers.values()) map.removeLayer(marker);
+  eventMarkers = new Map(events.map((event) => [event.id, createEventMarker(event)]));
+  renderEvents();
+};
+
+window.FomoSetLocations = setMapLocations;
 
 async function initialize() {
   try {

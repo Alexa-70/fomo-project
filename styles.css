@@ -57,13 +57,20 @@ button, input { font: inherit; }
 
 .map-badge {
   top: 18px;
-  left: 18px;
+  right: 18px;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 13px;
   border-radius: 999px;
   font-size: 11px;
+}
+
+.map-location-count {
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+  color: #c7d1df;
+  font-size: 10px;
 }
 
 .map-live-dot {
@@ -553,6 +560,20 @@ h1 {
   background: var(--accent-deep);
 }
 
+.location-map-marker {
+  fill: #5cc9dc;
+  fill-opacity: 0.92;
+  stroke: #10202b;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.location-map-marker:hover {
+  fill: #a0f0f5;
+  stroke: #f7f8fa;
+  stroke-width: 3;
+}
+
 .user-map-marker {
   display: grid;
   width: 22px;
@@ -582,10 +603,35 @@ h1 {
 
 .map-popup strong { font-size: 13px; }
 .map-popup span { font-size: 11px; }
+.map-popup .map-popup-event-title {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(17, 21, 30, 0.12);
+}
+
+.map-popup .map-popup-description {
+  white-space: normal;
+  line-height: 1.45;
+}
+
 .map-popup .popup-action {
   margin-top: 3px;
   color: var(--accent-deep);
   font-weight: 700;
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  background-color: rgba(92, 201, 220, 0.86);
+  color: #10202b;
+  font-weight: 750;
+}
+
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+  background-color: rgba(92, 201, 220, 0.3);
 }
 
 .leaflet-popup-content-wrapper, .leaflet-popup-tip {
