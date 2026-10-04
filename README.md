@@ -3,7 +3,7 @@
 Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar aplicația calculează drumul către evenimentul ales. Interfața folosește Leaflet și OpenStreetMap; backendul PowerShell oferă lista de evenimente și voturi, caută locații cu Nominatim și calculează rute auto cu OSRM.
 
 Navigarea este în bara de jos: **Acasă** afișează harta, iar **Funcții** deschide descoperirea evenimentelor, setările și instrumentele comunității. Codul barei de navigare este în `buttons-ui/`.
-Aplicație pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar aplicația calculează drumul către evenimentul ales. Interfața folosește Leaflet, MapLibre GL JS și stilul vectorial Bright de la OpenFreeMap (date OpenStreetMap). Backendul PowerShell caută locații cu Nominatim și calculează rute auto cu OSRM; Firebase Authentication și Realtime Database gestionează conturile, locațiile, cererile de owner și aprobarea evenimentelor.
+Aplicație pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar aplicația calculează drumul către evenimentul ales. Interfața folosește Leaflet și tile-uri raster OpenStreetMap. Backendul PowerShell caută locații cu Nominatim și calculează rute auto cu OSRM; Firebase Authentication și Realtime Database gestionează conturile, locațiile, cererile de owner și aprobarea evenimentelor.
 
 ## Pornire în Windows
 
