@@ -1,0 +1,50 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true",
+    "admins": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid"
+      }
+    },
+    "locations": {
+      ".read": true
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || (auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true))",
+        ".write": "auth != null && auth.uid == $uid && auth.token.email != null && !data.exists()",
+        ".validate": "newData.hasChildren(['email', 'username', 'createdAt']) && newData.child('email').val() == auth.token.email && newData.child('username').isString() && newData.child('username').val().length > 0 && newData.child('username').val().length <= 80 && newData.child('createdAt').isNumber()",
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "ownerRequests": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true",
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || (auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true))",
+        "$locationId": {
+          ".write": "auth != null && ((auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true) || (auth.token.email_verified == true && auth.uid == $uid && newData.child('userId').val() == $uid && newData.child('locationId').val() == $locationId && (!data.exists() || data.child('status').val() == 'rejected') && newData.child('status').val() == 'pending' && root.child('locations').child($locationId).child('ownerUid').val() == null))",
+          ".validate": "newData.hasChildren(['userId', 'email', 'username', 'locationId', 'locationName', 'city', 'status', 'submittedAt']) && (newData.child('status').val() == 'pending' && newData.numChildren() == 8 && !newData.child('reviewedAt').exists() && !newData.child('reviewedBy').exists() || (newData.child('status').val() == 'approved' || newData.child('status').val() == 'rejected') && newData.numChildren() == 10 && newData.child('reviewedAt').isNumber() && newData.child('reviewedBy').isString()) && newData.child('userId').val() == $uid && (newData.child('email').val() == data.child('email').val() || newData.child('email').val() == auth.token.email) && newData.child('username').isString() && newData.child('username').val().length > 0 && newData.child('username').val().length <= 80 && newData.child('locationId').val() == $locationId && root.child('locations').child($locationId).exists() && newData.child('locationName').val() == root.child('locations').child($locationId).child('name').val() && newData.child('city').val() == root.child('locations').child($locationId).child('city').val() && newData.child('submittedAt').isNumber()"
+        }
+      }
+    },
+    "communityEvents": {
+      ".indexOn": [
+        "status",
+        "submittedBy",
+        "locationId"
+      ],
+      ".read": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true || query.orderByChild == 'status' && query.equalTo == 'approved' || auth != null && auth.token.email_verified == true && query.orderByChild == 'submittedBy' && query.equalTo == auth.uid || auth != null && auth.token.email_verified == true && query.orderByChild == 'locationId' && root.child('locations').child(query.equalTo).child('ownerUid').val() == auth.uid",
+      "$eventId": {
+        ".read": "data.child('status').val() == 'approved' || auth != null && data.child('submittedBy').val() == auth.uid || auth != null && auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true || auth != null && auth.token.email_verified == true && root.child('locations').child(data.child('locationId').val()).child('ownerUid').val() == auth.uid",
+        ".write": "auth != null && ((auth.token.email_verified == true && !data.exists() && newData.child('submittedBy').val() == auth.uid && newData.child('status').val() == 'pending' && newData.child('startsAtMs').val() > now && root.child('locations').child(newData.child('locationId').val()).exists()) || (auth.token.email_verified == true && data.child('status').val() == 'pending' && (root.child('admins').child(auth.uid).val() == true || root.child('locations').child(data.child('locationId').val()).child('ownerUid').val() == auth.uid) && newData.child('submittedBy').val() == data.child('submittedBy').val() && newData.child('submittedByEmail').val() == data.child('submittedByEmail').val() && newData.child('title').val() == data.child('title').val() && newData.child('category').val() == data.child('category').val() && newData.child('description').val() == data.child('description').val() && newData.child('locationId').val() == data.child('locationId').val() && newData.child('venue').val() == data.child('venue').val() && newData.child('city').val() == data.child('city').val() && newData.child('latitude').val() == data.child('latitude').val() && newData.child('longitude').val() == data.child('longitude').val() && newData.child('startsAt').val() == data.child('startsAt').val() && newData.child('startsAtMs').val() == data.child('startsAtMs').val() && newData.child('submittedAt').val() == data.child('submittedAt').val() && (newData.child('status').val() == 'approved' || newData.child('status').val() == 'rejected') && newData.child('reviewedAt').isNumber() && newData.child('reviewedBy').val() == auth.uid))",
+        ".validate": "newData.hasChildren(['title', 'category', 'description', 'locationId', 'venue', 'city', 'latitude', 'longitude', 'startsAt', 'startsAtMs', 'status', 'submittedBy', 'submittedByEmail', 'submittedAt']) && (newData.child('status').val() == 'pending' && !newData.child('reviewedAt').exists() && !newData.child('reviewedBy').exists() || (newData.child('status').val() == 'approved' || newData.child('status').val() == 'rejected') && newData.child('reviewedAt').isNumber() && newData.child('reviewedBy').isString()) && newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('title').val().length <= 80 && newData.child('category').isString() && newData.child('category').val().length > 0 && newData.child('category').val().length <= 40 && newData.child('description').isString() && newData.child('description').val().length > 0 && newData.child('description').val().length <= 500 && newData.child('locationId').isString() && newData.child('venue').val() == root.child('locations').child(newData.child('locationId').val()).child('name').val() && newData.child('city').val() == root.child('locations').child(newData.child('locationId').val()).child('city').val() && newData.child('latitude').val() == root.child('locations').child(newData.child('locationId').val()).child('latitude').val() && newData.child('longitude').val() == root.child('locations').child(newData.child('locationId').val()).child('longitude').val() && newData.child('startsAt').isString() && newData.child('startsAtMs').isNumber() && newData.child('submittedBy').isString() && (newData.child('submittedByEmail').val() == data.child('submittedByEmail').val() || newData.child('submittedByEmail').val() == auth.token.email) && newData.child('submittedAt').isNumber()",
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}
