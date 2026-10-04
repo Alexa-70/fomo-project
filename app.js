@@ -44,6 +44,12 @@ const locationCount = document.querySelector("#map-location-count");
 let searchTimer = null;
 let searchRequestId = 0;
 
+window.FomoAppContext = {
+  getEvents: () => events.map((event) => ({ ...event })),
+  getOrigin: () => ({ ...origin }),
+  getSelectedEventId: () => selectedEventId,
+};
+
 const voterId = (() => {
   const storageKey = "locally-voter-id";
   let id = localStorage.getItem(storageKey);

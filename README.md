@@ -6,7 +6,6 @@ Aplicație pentru descoperirea evenimentelor locale: evenimentele apar pe o hart
 
 1. Deschide PowerShell în folderul proiectului.
 2. Pornește backendul:
-
 ```powershell
 .\start.ps1
 ```
@@ -63,6 +62,22 @@ Primește coordonatele selectate:
 Răspunsul conține distanța, durata estimată, indicațiile și geometria GeoJSON `LineString` (coordonatele sunt perechi `[longitudine, latitudine]`). Interfața poate folosi locația browserului sau o adresă introdusă și afișează traseul până la evenimentul ales.
 
 Interacțiunea pentru alegerea originii, solicitarea traseului și desenarea acestuia pe hartă este izolată în `route-planner.js`. Utilizatorul poate apăsa „Folosește locația mea” pentru a permite accesul la locația browserului sau poate căuta o adresă; apoi butonul „Cum ajung?” calculează și afișează traseul către eveniment.
+
+### `POST /api/assistant`
+
+Trimite întrebarea și istoricul recent către asistentul Groq. Serverul adaugă evenimentele disponibile și preferințele selectate, iar răspunsul este `{ "reply": "..." }`. Pentru întrebări de traseu, interfața calculează ruta cu endpointul `/api/routes` și transmite către Groq doar rezumatul și indicațiile rutei; coordonatele exacte de plecare rămân în browser și la furnizorul de rutare.
+
+Comportamentul asistentului este ghidat prin instrucțiunile din `server.ps1`, nu prin reantrenarea modelului. Acesta poate recomanda evenimentele din context, explica funcțiile prototipului și interpreta traseul recent; nu poate actualiza voturi sau setări în locul utilizatorului și nu vede propunerile salvate doar în browser.
+
+Asistentul este disponibil din butonul „Întreabă FOMO”. Pentru a-l configura, setează cheia numai în sesiunea PowerShell în care pornești serverul:
+
+```powershell
+$env:GROQ_API_KEY = Read-Host "GROQ_API_KEY"
+$env:GROQ_MODEL = "openai/gpt-oss-120b"
+.\start.ps1
+```
+
+`GROQ_MODEL` este opțional și implicit este `openai/gpt-oss-120b`. Nu salva cheia în fișierele proiectului și nu o trimite din browser. Dacă cheia lipsește, endpointul întoarce `503`; dacă Groq nu răspunde, întoarce `502`.
 
 ## Firebase: conturi, locații și moderare
 
