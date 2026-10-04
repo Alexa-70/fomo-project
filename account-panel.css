@@ -1,0 +1,190 @@
+.account-panel h2 {
+  margin: 0 0 14px;
+  font-size: 20px;
+}
+
+.account-panel [hidden] {
+  display: none !important;
+}
+
+.account-auth-switch {
+  margin-top: 14px;
+}
+
+.account-form {
+  display: grid;
+  gap: 11px;
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 13px;
+  background: #171c27;
+}
+
+.account-field {
+  display: grid;
+  gap: 6px;
+  color: #dfe3ea;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.account-field input,
+.account-field select {
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  outline: 0;
+  background: rgba(8, 11, 17, 0.8);
+  color: #f7f8fa;
+  font: inherit;
+  font-size: 12px;
+}
+
+.account-field input:focus,
+.account-field select:focus {
+  border-color: rgba(217, 255, 87, 0.55);
+}
+
+.account-field option {
+  background: #171c27;
+}
+
+.account-submit,
+.account-secondary {
+  min-height: 38px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: #d9ff57;
+  color: #11151e;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.account-submit:disabled,
+.account-secondary:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.account-secondary {
+  margin: 10px 8px 4px 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: #e5e8ee;
+  font-weight: 600;
+}
+
+.account-profile {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(217, 255, 87, 0.2);
+  border-radius: 11px;
+  background: rgba(217, 255, 87, 0.06);
+  overflow-wrap: anywhere;
+}
+
+.account-profile strong {
+  font-size: 13px;
+}
+
+.account-profile span,
+.account-help {
+  margin: 0;
+  color: #929baa;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.account-role-badge {
+  justify-self: start;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: #c4cad4 !important;
+  font-size: 10px !important;
+  font-weight: 750;
+  line-height: 1.2 !important;
+}
+
+.account-role-badge[data-role="owner"],
+.account-role-badge[data-role="admin"] {
+  border-color: rgba(217, 255, 87, 0.32);
+  background: rgba(217, 255, 87, 0.1);
+  color: #d9ff57 !important;
+}
+
+.account-section {
+  margin-top: 18px;
+}
+
+.account-section h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.account-request-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.account-request-card {
+  display: grid;
+  gap: 6px;
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  background: #151a24;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.account-request-card span {
+  color: #aab2c0;
+}
+
+.account-request-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.account-request-actions button {
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: transparent;
+  color: #ff9a9a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+}
+
+.account-request-actions button.approve {
+  border-color: rgba(217, 255, 87, 0.28);
+  color: #d9ff57;
+}
+
+.account-status {
+  min-height: 18px;
+  margin: 10px 0;
+  color: #aab2c0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.account-status[data-state="success"] {
+  color: #d9ff57;
+}
+
+.account-status[data-state="error"] {
+  color: #ff8e8e;
+}
