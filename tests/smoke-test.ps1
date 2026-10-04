@@ -60,7 +60,8 @@ try {
     throw "Endpointul /health a întors un status neașteptat."
   }
 
-  foreach ($asset in @("app.js", "route-planner.js", "ride-sharing.js", "styles.css", "firebase-config.js", "firebase-client.js", "account-panel.js", "account-panel.css", "event-workflow.js", "locations.json", "database.rules.json")) {
+  foreach ($asset in @("app.js", "route-planner.js", "ride-sharing.js", "styles.css", "firebase-config.js", "firebase-client.js", "account-panel.js", "account-panel.css", "buttons-ui/buttons-ui.js", "buttons-ui/buttons-ui.css", "event-workflow.js", "locations.json", "database.rules.json")) {
+
     $assetResponse = Invoke-WebRequest -Uri "$baseUrl/$asset" -UseBasicParsing -TimeoutSec 5
     if ($assetResponse.StatusCode -ne 200) {
       throw "Resursa statică '$asset' nu a fost servită cu statusul 200."
@@ -139,10 +140,61 @@ try {
   $databaseRules = Get-Content -LiteralPath (Join-Path $projectRoot "database.rules.json") -Raw -Encoding UTF8 | ConvertFrom-Json
   $ownerRequestRule = $databaseRules.rules.ownerRequests
   $ownerRequestValidation = $ownerRequestRule.'$uid'.'$locationId'.'.validate'
-  if ($ownerRequestValidation -notmatch "newData\.numChildren\(\) == 8" -or
-    $ownerRequestValidation -notmatch "newData\.numChildren\(\) == 10" -or
-    $null -ne $ownerRequestRule.'$uid'.'$locationId'.'$other') {
+  if (-not $ownerRequestValidation.Contains("newData.hasChildren") -or
+    -not $ownerRequestValidation.Contains("newData.child('reviewedAt').isNumber()") -or
+    -not $ownerRequestValidation.Contains("newData.child('reviewedBy').isString()") -or
+    $ownerRequestRule.'$uid'.'$locationId'.'$other'.'.validate' -ne $false -or
+    $null -eq $ownerRequestRule.'$uid'.'$locationId'.userId -or
+    $null -eq $ownerRequestRule.'$uid'.'$locationId'.reviewedAt) {
     throw "Regulile cererilor de owner nu permit schema validă sau permit câmpuri nevalidate."
+  }
+
+  $usernameIndexRules = $databaseRules.rules.usernameIndex
+  $friendRequestRules = $databaseRules.rules.friendRequests
+  $friendRules = $databaseRules.rules.friends
+  $friendWriteRule = $friendRules.'$uid'.'$friendUid'.'.write'
+  if (-not $usernameIndexRules.'$encodedUsernameKey'.'.read'.Contains("email_verified == true") -or
+    -not $usernameIndexRules.'$encodedUsernameKey'.'.write'.Contains("newData.child('uid').val() == auth.uid") -or
+    -not $usernameIndexRules.'$encodedUsernameKey'.'.validate'.Contains("root.child('publicProfiles')") -or
+    -not $friendRequestRules.'$recipientUid'.'$requesterUid'.'.write'.Contains("newData.child('status').val() == 'accepted'") -or
+    -not $friendRequestRules.'$recipientUid'.'$requesterUid'.'.write'.Contains("!newData.exists()") -or
+    -not $friendRules.'$uid'.'.read'.Contains("auth.uid == $uid") -or
+    -not $friendWriteRule.Contains('root.child(''friendRequests'').child($uid).child($friendUid)') -or
+    -not $friendWriteRule.Contains('root.child(''friendRequests'').child($friendUid).child($uid)') -or
+    -not $friendWriteRule.Contains('auth.uid == $uid || auth.uid == $friendUid')) {
+    throw "Regulile Firebase pentru profiluri publice, cereri și prietenii nu permit fluxul sigur așteptat."
+  }
+
+  $friendsScript = Get-Content -LiteralPath (Join-Path $projectRoot "buttons-ui\buttons-ui.js") -Raw -Encoding UTF8
+  $accountPanelScript = Get-Content -LiteralPath (Join-Path $projectRoot "account-panel.js") -Raw -Encoding UTF8
+  foreach ($requiredFriendFeature in @("getUsernameIndexKey", 'usernameIndex/${getUsernameIndexKey(query)}', 'friendRequests/${friendUser.uid}', 'friends/${friendUser.uid}', 'publicProfiles/${user.uid}', 'friends/${friendUser.uid}`)', 'friendRecords = friendsSnapshot.val() || {}', "emailVerified", "getIdToken(true)", "friendsCount.textContent = String(friends.length)")) {
+    if (-not $friendsScript.Contains($requiredFriendFeature)) {
+      throw "Fluxul de prietenie nu include '$requiredFriendFeature'."
+    }
+  }
+  if (-not $accountPanelScript.Contains('publicProfiles/${credential.user.uid}')) {
+    throw "Înregistrarea alternativă nu creează profilul public căutabil."
+  }
+  if ($friendsScript.Contains("fomo-local-friends-v1")) {
+    throw "Lista de prieteni nu trebuie să fie salvată doar local."
+  }
+
+  $serverSource = Get-Content -LiteralPath $serverScript -Raw -Encoding UTF8
+  $catalogStart = $serverSource.IndexOf("function Get-PublicAssistantCatalog", [System.StringComparison]::Ordinal)
+  $catalogEnd = $serverSource.IndexOf("function Get-VoteStore", [System.StringComparison]::Ordinal)
+  if ($catalogStart -lt 0 -or $catalogEnd -le $catalogStart) {
+    throw "Serverul nu definește citirea catalogului public pentru asistent."
+  }
+  $catalogFunction = $serverSource.Substring($catalogStart, $catalogEnd - $catalogStart)
+  foreach ($requiredSource in @("locations.json", "communityEvents.json", "approvedEvents", "locationId", "category")) {
+    if (-not $catalogFunction.Contains($requiredSource)) {
+      throw "Contextul public al asistentului nu include '$requiredSource'."
+    }
+  }
+  foreach ($privateField in @("email", "submittedBy", "reviewedBy", "ownerRequests")) {
+    if ($catalogFunction -match "\b$privateField\b") {
+      throw "Contextul asistentului nu trebuie să selecteze câmpul privat '$privateField'."
+    }
   }
 
   $locations = ConvertFrom-Json -InputObject (Get-Content -LiteralPath (Join-Path $projectRoot "locations.json") -Raw -Encoding UTF8)

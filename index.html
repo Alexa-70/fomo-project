@@ -1,4 +1,3 @@
-<!doctype html>
 <html lang="ro">
   <head>
     <meta charset="UTF-8" />
@@ -6,16 +5,27 @@
     <meta name="theme-color" content="#fffdfa" />
     <title>FOMO — Localuri și Evenimente Live</title>
     <link rel="preconnect" href="https://unpkg.com" />
-    <link rel="preconnect" href="https://tiles.openfreemap.org" />
+    <link rel="preconnect" href="https://tile.openstreetmap.org" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
-    <link rel="stylesheet" href="./styles.css?v=clean-orange-map-v2" />
-    <link rel="stylesheet" href="./settings-panel.css?v=warm-palette-v1" />
-    <link rel="stylesheet" href="./event-workflow.css?v=warm-palette-v1" />
-    <link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=profile-firebase-auth-v2" />
-    <link rel="stylesheet" href="./styles.css?v=clean-orange-map-v2" />
+<!-- Stilul obligatoriu pentru harta OpenFreeMap (din gnt_branch) -->
+<link rel="stylesheet" href="https://unpkg.com" />
+
+<!-- Noua temă vizuală pentru hartă (din gnt_branch) -->
+<link rel="stylesheet" href="./styles.css?v=clean-orange-map-v2" />
+
+<!-- Stiluri comune de interfață (prezente în ambele ramuri) -->
+<link rel="stylesheet" href="./settings-panel.css?v=warm-palette-v1" />
+<link rel="stylesheet" href="./event-workflow.css?v=warm-palette-v1" />
+
+<!-- UI Butoane și Autentificare (versiunea actualizată din main) -->
+<link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=profile-firebase-auth-v2" />
+
+<!-- Stiluri adiționale unice din main care trebuie păstrate -->
+<link rel="stylesheet" href="./styles.css?v=floating-v1" />
+<link rel="stylesheet" href="./styles.css?v=location-tooltips-and-pins-v1" />
+
     <link rel="stylesheet" href="./settings-panel.css" />
     <link rel="stylesheet" href="./event-workflow.css" />
     <link rel="stylesheet" href="./account-panel.css" />
@@ -26,7 +36,6 @@
     <div id="map" role="application" aria-label="Hartă interactivă cu evenimente"></div>
 
     <!-- Overlay-uri peste hartă -->
-    <div class="map-badge"><span class="map-live-dot"></span>Vibe Map Live</div>
     <div class="map-hint" id="map-hint"></div>
     <button class="map-route-cancel" id="cancel-route-button" type="button" aria-label="Anulează traseul" title="Anulează traseul" hidden>
       Anulează traseul <span aria-hidden="true">×</span>
@@ -113,9 +122,10 @@
           <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="6" r="1.5" /><circle cx="12" cy="6" r="1.5" /><circle cx="19" cy="6" r="1.5" /><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /><circle cx="5" cy="18" r="1.5" /><circle cx="12" cy="18" r="1.5" /><circle cx="19" cy="18" r="1.5" /></svg>
           <span>Funcții</span>
         </button>
-        <button class="bottom-navigation-button" id="friends-button" type="button" aria-controls="friends-panel" aria-expanded="false">
+        <button class="bottom-navigation-button friends-navigation-button" id="friends-button" type="button" aria-controls="friends-panel" aria-expanded="false">
           <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.8M17 14a5 5 0 0 1 3.5 4.8" /></svg>
           <span>Friends</span>
+          <span class="friends-count-badge" id="friends-count-badge" hidden></span>
         </button>
       </div>
       <button class="bottom-navigation-button active" id="home-button" type="button" aria-current="page">
@@ -262,19 +272,30 @@
         </div>
         <button class="profile-close-button" id="friends-close-button" type="button" aria-label="Înapoi la hartă">×</button>
       </header>
-      <p class="profile-places-note">Lista este salvată doar în acest browser. Aplicația nu are încă un director de utilizatori și nu trimite cereri de prietenie.</p>
+      <p class="profile-places-note">Caută username-ul exact al unei persoane înregistrate. Aceasta va primi cererea și trebuie să o accepte.</p>
       <button class="friends-find-button" id="friends-find-button" type="button" aria-controls="friends-search-form" aria-expanded="false">
         <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3" /><path d="m16 16 4.5 4.5" /><path d="M10.8 7.8v6M7.8 10.8h6" /></svg>
         Caută prieteni
       </button>
       <form class="friends-search-form" id="friends-search-form" hidden>
-        <label class="search-label" for="friends-search-input">Caută sau adaugă un nume</label>
+        <label class="search-label" for="friends-search-input">Username exact</label>
         <div class="friends-search-row">
-          <input class="search-input" id="friends-search-input" type="search" maxlength="40" autocomplete="off" placeholder="Numele prietenului" />
-          <button class="friends-add-button" type="submit">Adaugă</button>
+          <input class="search-input" id="friends-search-input" type="search" maxlength="80" autocomplete="off" placeholder="Username-ul persoanei" />
+          <button class="friends-add-button" type="submit">Caută</button>
         </div>
       </form>
+      <ul class="friends-list friends-search-results" id="friends-search-results"></ul>
       <p class="friends-status" id="friends-status" role="status" aria-live="polite"></p>
+      <section class="friends-list-section friends-requests-section" aria-labelledby="friends-requests-heading" hidden>
+        <div class="profile-section-heading">
+          <div>
+            <p class="eyebrow">Notificări</p>
+            <h2 id="friends-requests-heading">Cereri de prietenie</h2>
+          </div>
+          <span class="friends-count" id="friends-requests-count">0</span>
+        </div>
+        <ul class="friends-list" id="friends-requests-list"></ul>
+      </section>
       <section class="friends-list-section" aria-labelledby="friends-list-heading">
         <div class="profile-section-heading">
           <div>
@@ -289,20 +310,20 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-    <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-    <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/dist/leaflet-maplibre-gl.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
     <script src="./app.js?v=clean-orange-map-v2"></script>
     <script src="./settings-panel.js"></script>
     <script src="./firebase-config.js"></script>
-    <script src="./firebase-client.js?v=profile-repair-v2"></script>
+    <script src="./firebase-client.js?v=location-photo-catalog-v1"></script>
     <script src="./event-workflow.js"></script>
     <script src="./account-panel.js?v=profile-repair-v1"></script>
     <script src="./route-planner.js?v=warm-map-theme-v1"></script>
     <script src="./ride-sharing.js?v=ridesharing-v1"></script>
     <script src="./buttons-ui/buttons-ui.js?v=profile-auth-status-v3"></script>
+    <script src="./route-planner.js"></script>
+    <script src="./buttons-ui/buttons-ui.js?v=firebase-friends-v5"></script>
     <script src="./ai-assistant.js"></script>
   </body>
 </html>

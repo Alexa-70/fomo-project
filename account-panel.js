@@ -337,6 +337,10 @@
         username,
         createdAt: firebase.database.ServerValue.TIMESTAMP,
       });
+      await api.db.ref(`publicProfiles/${credential.user.uid}`).set({
+        username,
+        usernameKey: username.toLocaleLowerCase("ro"),
+      });
       await credential.user.sendEmailVerification();
     } catch (error) {
       console.error("Account created, but profile or verification email could not be saved.", error);
@@ -449,6 +453,7 @@
           updates[`locations/${location.id}`] = {
             ...location,
             ...(existing && existing.ownerUid ? { ownerUid: existing.ownerUid } : {}),
+            ...(existing && existing.imageUrl && !location.imageUrl ? { imageUrl: existing.imageUrl } : {}),
           };
         }
         await api.db.ref().update(updates);
