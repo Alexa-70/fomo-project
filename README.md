@@ -1,6 +1,6 @@
 # Locally — evenimente și trasee pe hartă
 
-Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar aplicația calculează drumul către evenimentul ales. Interfața folosește Leaflet și OpenStreetMap; backendul PowerShell oferă lista de evenimente și voturi, caută locații cu Nominatim și calculează rute auto cu OSRM.
+Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar aplicația calculează drumul către evenimentul ales. Interfața folosește Leaflet, MapLibre GL JS și stilul vectorial Bright de la OpenFreeMap (date OpenStreetMap); backendul PowerShell oferă lista de evenimente și voturi, caută locații cu Nominatim și calculează rute auto cu OSRM.
 
 ## Pornire în Windows
 
