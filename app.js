@@ -182,6 +182,34 @@ function createLocationPopup(location) {
   return popup;
 }
 
+function createLocationTooltip(location) {
+  const tooltip = createElement("div", "location-tooltip");
+  const imageUrl = typeof location.imageUrl === "string" ? location.imageUrl.trim() : "";
+
+  if (imageUrl) {
+    try {
+      const parsedImageUrl = new URL(imageUrl);
+      if (parsedImageUrl.protocol === "https:") {
+        const image = document.createElement("img");
+        image.src = parsedImageUrl.href;
+        image.alt = `Fotografie: ${location.name}`;
+        image.loading = "lazy";
+        image.referrerPolicy = "no-referrer";
+        image.addEventListener("error", () => image.remove(), { once: true });
+        tooltip.append(image);
+      }
+    } catch (error) {
+      console.warn(`Adresa imaginii pentru locația "${location.name}" nu este validă.`, error);
+    }
+  }
+
+  tooltip.append(
+    createElement("strong", "", location.name),
+    createElement("span", "", `${location.city} · ${location.category}`),
+  );
+  return tooltip;
+}
+
 function setMapLocations(locations) {
   locationLayer.clearLayers();
   const validLocations = locations.filter((location) =>
@@ -199,7 +227,13 @@ function setMapLocations(locations) {
       { radius: 7, className: "location-map-marker", fillColor: "#5cc9dc", fillOpacity: 0.92, color: "#10202b", weight: 2.5 },
     );
     marker.bindPopup(() => createLocationPopup(location));
-    marker.bindTooltip(location.name, { direction: "top", offset: [0, -7], sticky: true });
+    marker.bindTooltip(() => createLocationTooltip(location), {
+      direction: "top",
+      offset: [0, -7],
+      sticky: true,
+      opacity: 1,
+      className: "location-map-tooltip",
+    });
     marker.on("click", () => {
       mapHint.textContent = `${location.name} · ${location.city}`;
     });

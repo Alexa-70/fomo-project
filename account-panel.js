@@ -449,6 +449,7 @@
           updates[`locations/${location.id}`] = {
             ...location,
             ...(existing && existing.ownerUid ? { ownerUid: existing.ownerUid } : {}),
+            ...(existing && existing.imageUrl && !location.imageUrl ? { imageUrl: existing.imageUrl } : {}),
           };
         }
         await api.db.ref().update(updates);
