@@ -10,13 +10,22 @@ const eventCount = document.querySelector("#event-count");
 const statusMessage = document.querySelector("#status-message");
 const mapHint = document.querySelector("#map-hint");
 
-const map = L.map("map", { zoomControl: false }).setView([DEFAULT_ORIGIN.latitude, DEFAULT_ORIGIN.longitude], 13);
+/* ==================== HARTĂ LEAFLET ==================== */
+const map = L.map("map", { zoomControl: false })
+  .setView([DEFAULT_ORIGIN.latitude, DEFAULT_ORIGIN.longitude], 13);
+
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
 }).addTo(map);
+
 L.control.zoom({ position: "bottomright" }).addTo(map);
 
+// 🔥 FIX CRUCIAL: forțează Leaflet să calculeze dimensiunea corect
+setTimeout(() => map.invalidateSize(), 100);
+window.addEventListener("resize", () => map.invalidateSize());
+
+/* ==================== STARE GLOBALĂ ==================== */
 let origin = { ...DEFAULT_ORIGIN };
 let events = [];
 let selectedEventId = null;
@@ -39,6 +48,79 @@ const voterId = (() => {
   return id;
 })();
 
+/* ==================== PANOU PLUTITOR (DRAG + MINIMIZE) ==================== */
+const floatingPanel = document.getElementById("floating-panel");
+const panelDragHandle = document.getElementById("panel-drag-handle");
+const panelToggle = document.getElementById("panel-toggle");
+
+panelToggle.addEventListener("click", () => {
+  floatingPanel.classList.toggle("minimized");
+  const isMin = floatingPanel.classList.contains("minimized");
+  panelToggle.querySelector(".toggle-icon").textContent = isMin ? "+" : "−";
+  panelToggle.setAttribute("aria-label", isMin ? "Maximizează panoul" : "Minimizează panoul");
+  setTimeout(() => map.invalidateSize(), 250);
+});
+
+let dragState = null;
+
+function getClientPoint(e) {
+  if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  return { x: e.clientX, y: e.clientY };
+}
+
+function startDrag(e) {
+  if (e.target.closest(".panel-toggle")) return;
+
+  const rect = floatingPanel.getBoundingClientRect();
+  const point = getClientPoint(e);
+
+  floatingPanel.style.left = rect.left + "px";
+  floatingPanel.style.top = rect.top + "px";
+  floatingPanel.style.right = "auto";
+  floatingPanel.style.bottom = "auto";
+  floatingPanel.style.transition = "none";
+
+  dragState = {
+    offsetX: point.x - rect.left,
+    offsetY: point.y - rect.top,
+  };
+
+  document.addEventListener("mousemove", onDragMove);
+  document.addEventListener("mouseup", endDrag);
+  document.addEventListener("touchmove", onDragMove, { passive: false });
+  document.addEventListener("touchend", endDrag);
+}
+
+function onDragMove(e) {
+  if (!dragState) return;
+  e.preventDefault();
+  const point = getClientPoint(e);
+  const panelWidth = floatingPanel.offsetWidth;
+  const panelHeight = floatingPanel.offsetHeight;
+
+  let newLeft = point.x - dragState.offsetX;
+  let newTop = point.y - dragState.offsetY;
+
+  newLeft = Math.max(8, Math.min(window.innerWidth - panelWidth - 8, newLeft));
+  newTop = Math.max(8, Math.min(window.innerHeight - panelHeight - 8, newTop));
+
+  floatingPanel.style.left = newLeft + "px";
+  floatingPanel.style.top = newTop + "px";
+}
+
+function endDrag() {
+  dragState = null;
+  floatingPanel.style.transition = "";
+  document.removeEventListener("mousemove", onDragMove);
+  document.removeEventListener("mouseup", endDrag);
+  document.removeEventListener("touchmove", onDragMove);
+  document.removeEventListener("touchend", endDrag);
+}
+
+panelDragHandle.addEventListener("mousedown", startDrag);
+panelDragHandle.addEventListener("touchstart", startDrag, { passive: true });
+
+/* ==================== UTILITARE ==================== */
 function setStatus(message, state = "") {
   statusMessage.textContent = message;
   if (state) statusMessage.dataset.state = state;
@@ -77,14 +159,12 @@ function formatEventDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("ro-RO", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
+    weekday: "short", day: "numeric", month: "short",
+    hour: "2-digit", minute: "2-digit",
   }).format(date);
 }
 
+/* ==================== MARKERE ==================== */
 function createEventMarker(event) {
   const markerIcon = L.divIcon({
     className: "",
