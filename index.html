@@ -2,24 +2,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#fbf5e6" />
+    <meta name="theme-color" content="#fffdfa" />
     <title>FOMO — Localuri și Evenimente Live</title>
     <link rel="preconnect" href="https://unpkg.com" />
     <link rel="preconnect" href="https://tile.openstreetmap.org" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-    <link rel="stylesheet" href="./styles.css?v=category-map-pins-v1" />
-    <link rel="stylesheet" href="./settings-panel.css?v=warm-palette-v1" />
-    <link rel="stylesheet" href="./event-workflow.css?v=warm-palette-v1" />
-    <link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=firebase-friends-v1" />
-    <link rel="stylesheet" href="./styles.css?v=floating-v1" />
-    <link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=profile-firebase-auth-v2" />
-    <link rel="stylesheet" href="./styles.css?v=location-tooltips-and-pins-v1" />
+<!-- Stilul obligatoriu pentru harta OpenFreeMap (din gnt_branch) -->
+<link rel="stylesheet" href="https://unpkg.com" />
+
+<!-- Noua temă vizuală pentru hartă (din gnt_branch) -->
+<link rel="stylesheet" href="./styles.css?v=clean-orange-map-v2" />
+
+<!-- Stiluri comune de interfață (prezente în ambele ramuri) -->
+<link rel="stylesheet" href="./settings-panel.css?v=warm-palette-v1" />
+<link rel="stylesheet" href="./event-workflow.css?v=warm-palette-v1" />
+
+<!-- UI Butoane și Autentificare (versiunea actualizată din main) -->
+<link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=profile-firebase-auth-v2" />
+
+<!-- Stiluri adiționale unice din main care trebuie păstrate -->
+<link rel="stylesheet" href="./styles.css?v=floating-v1" />
+<link rel="stylesheet" href="./styles.css?v=location-tooltips-and-pins-v1" />
+
     <link rel="stylesheet" href="./settings-panel.css" />
     <link rel="stylesheet" href="./event-workflow.css" />
     <link rel="stylesheet" href="./account-panel.css" />
-    <link rel="stylesheet" href="./ai-assistant.css" />
+    <link rel="stylesheet" href="./ai-assistant.css?v=clean-orange-map-v2" />
   </head>
   <body>
     <!-- HARTA FULLSCREEN -->
@@ -27,7 +37,9 @@
 
     <!-- Overlay-uri peste hartă -->
     <div class="map-hint" id="map-hint"></div>
-
+    <button class="map-route-cancel" id="cancel-route-button" type="button" aria-label="Anulează traseul" title="Anulează traseul" hidden>
+      Anulează traseul <span aria-hidden="true">×</span>
+    </button>
     <!-- Panoul cu funcțiile suplimentare -->
     <aside class="floating-panel" id="floating-panel">
       <header class="panel-header">
@@ -100,7 +112,7 @@
         </div>
 
         <p class="status-message" id="status-message" role="status">Conectare la serverul FOMO...</p>
-        <p class="provider-note">Hărți © OpenStreetMap · Rute cu OSRM</p>
+        <p class="provider-note">Rută auto în aplicație · transport public prin Google Maps</p>
       </div>
     </aside>
 
@@ -301,12 +313,15 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
-    <script src="./app.js?v=osm-raster-map-v1"></script>
+    <script src="./app.js?v=clean-orange-map-v2"></script>
     <script src="./settings-panel.js"></script>
     <script src="./firebase-config.js"></script>
     <script src="./firebase-client.js?v=location-photo-catalog-v1"></script>
     <script src="./event-workflow.js"></script>
     <script src="./account-panel.js?v=profile-repair-v1"></script>
+    <script src="./route-planner.js?v=warm-map-theme-v1"></script>
+    <script src="./ride-sharing.js?v=ridesharing-v1"></script>
+    <script src="./buttons-ui/buttons-ui.js?v=profile-auth-status-v3"></script>
     <script src="./route-planner.js"></script>
     <script src="./buttons-ui/buttons-ui.js?v=firebase-friends-v5"></script>
     <script src="./ai-assistant.js"></script>
