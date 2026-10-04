@@ -65,9 +65,9 @@ Interacțiunea pentru alegerea originii, solicitarea traseului și desenarea ace
 
 ### `POST /api/assistant`
 
-Trimite întrebarea și istoricul recent către asistentul Groq. Serverul adaugă evenimentele disponibile și preferințele selectate, iar răspunsul este `{ "reply": "..." }`. Pentru întrebări de traseu, interfața calculează ruta cu endpointul `/api/routes` și transmite către Groq doar rezumatul și indicațiile rutei; coordonatele exacte de plecare rămân în browser și la furnizorul de rutare.
+Trimite întrebarea și istoricul recent către asistentul Groq. Serverul citește din Realtime Database catalogul public de locații și doar evenimentele aprobate, apoi transmite datele descriptive necesare și preferințele selectate; nu transmite conturi, emailuri, UID-uri, cereri de owner sau propuneri în așteptare. Răspunsul este `{ "reply": "..." }`. Pentru întrebări de traseu, interfața calculează ruta cu endpointul `/api/routes` și transmite către Groq doar rezumatul și indicațiile rutei; coordonatele exacte de plecare rămân în browser și la furnizorul de rutare.
 
-Comportamentul asistentului este ghidat prin instrucțiunile din `server.ps1`, nu prin reantrenarea modelului. Acesta poate recomanda evenimentele din context, explica funcțiile prototipului și interpreta traseul recent; nu poate actualiza voturi sau setări în locul utilizatorului și nu vede propunerile salvate doar în browser.
+Comportamentul asistentului este ghidat prin instrucțiunile din `server.ps1`, nu prin reantrenarea modelului. Acesta poate căuta cele 90 de locații după oraș, nume și categorie, recomanda evenimente aprobate și interpreta traseul recent; datele sunt citite la fiecare întrebare. Dacă Realtime Database nu este disponibilă, endpointul întoarce o eroare în loc să răspundă folosind date incomplete. Asistentul nu poate actualiza voturi sau setări în locul utilizatorului.
 
 Asistentul este disponibil din butonul „Întreabă FOMO”. Pentru a-l configura, setează cheia numai în sesiunea PowerShell în care pornești serverul:
 
