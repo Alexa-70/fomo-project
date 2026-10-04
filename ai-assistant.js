@@ -277,7 +277,7 @@
 
     try {
       const route = await getRouteContext(message);
-      const response = await fetch("/api/assistant", {
+      const data = await window.FomoRouteContext.apiRequest("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -288,8 +288,6 @@
           route,
         }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Asistentul nu a putut răspunde.");
       if (typeof data.reply !== "string" || !data.reply.trim()) {
         throw new Error("Asistentul a returnat un răspuns gol.");
       }

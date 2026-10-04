@@ -1,6 +1,15 @@
 const DEFAULT_ORIGIN = { latitude: 46.7712, longitude: 23.6236 };
 const PROFILE_VISITS_KEY = "fomo-place-visits-v1";
 
+function getApiBaseUrl() {
+  const localHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+  const isLocalFrontend = window.location.protocol === "file:" ||
+    (localHosts.has(window.location.hostname) && window.location.port !== "5101");
+  return isLocalFrontend ? "http://localhost:5101" : "";
+}
+
+const API_BASE_URL = getApiBaseUrl();
+
 const originInput = document.querySelector("#origin");
 const originSuggestions = document.querySelector("#origin-suggestions");
 const originHint = document.querySelector("#origin-hint");
@@ -142,7 +151,7 @@ function formatDuration(seconds) {
 }
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(path, options);
+  const response = await fetch(`${API_BASE_URL}${path}`, options);
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Cererea către server nu a reușit.");
   return data;

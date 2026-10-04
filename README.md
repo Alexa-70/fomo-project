@@ -13,9 +13,9 @@ Aplicație pentru descoperirea evenimentelor locale: evenimentele apar pe o hart
 .\start.ps1
 ```
 
-Backendul pornește la `http://localhost:5055/`. Lasă fereastra PowerShell deschisă cât folosești aplicația.
+Backendul pornește la `http://localhost:5101/`. Lasă fereastra PowerShell deschisă cât folosești aplicația.
 
-3. Deschide `index.html` în browser. Este necesară conexiune la internet pentru librăria Leaflet, căutarea locațiilor și dalele hărții.
+3. Deschide `http://localhost:5101/` sau pornește `index.html` prin VS Code Live Server. Pentru căutarea adreselor, rutare și voturi, păstrează backendul pornit pe portul `5101`; aplicația detectează automat Live Server local și trimite cererile API către backend. Deschiderea directă a paginii cu `file://` poate fi limitată de browser; folosește Live Server. Este necesară conexiune la internet pentru librăria Leaflet, căutarea locațiilor și dalele hărții.
 
 Dacă Windows blochează rularea scripturilor, pornește serverul explicit:
 

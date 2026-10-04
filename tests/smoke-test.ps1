@@ -82,8 +82,15 @@ try {
   $routeScript = Get-Content -LiteralPath (Join-Path $projectRoot "route-planner.js") -Raw -Encoding UTF8
   $indexHtml = Get-Content -LiteralPath (Join-Path $projectRoot "index.html") -Raw -Encoding UTF8
   $styleSheet = Get-Content -LiteralPath (Join-Path $projectRoot "styles.css") -Raw -Encoding UTF8
-  if ($appScript -match "http://localhost:5101" -or $appScript -notmatch "fetch\(path, options\)") {
-    throw "Cererea API trebuie să folosească aceeași origine ca interfața."
+  if ($appScript -notmatch "function getApiBaseUrl\(\)" -or
+    $appScript -notmatch 'window\.location\.protocol === "file:"' -or
+    $appScript -notmatch 'window\.location\.port !== "5101"' -or
+    $appScript -notmatch 'fetch\(`\$\{API_BASE_URL\}\$\{path\}`, options\)') {
+    throw "Cererile API trebuie să folosească backendul local din Live Server și aceeași origine din aplicația găzduită."
+  }
+  $assistantScript = Get-Content -LiteralPath (Join-Path $projectRoot "ai-assistant.js") -Raw -Encoding UTF8
+  if (-not $assistantScript.Contains('window.FomoRouteContext.apiRequest("/api/assistant"')) {
+    throw "Asistentul trebuie să folosească aceeași origine API ca ruta și căutarea."
   }
   if (-not $appScript.Contains("function applyFomoMapTheme()") -or
     -not $appScript.Contains('park: ["fill-color", "#f5d5b8"]') -or
