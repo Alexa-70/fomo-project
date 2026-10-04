@@ -11,12 +11,12 @@ const statusMessage = document.querySelector("#status-message");
 const mapHint = document.querySelector("#map-hint");
 
 /* ==================== HARTĂ LEAFLET ==================== */
-const map = L.map("map", { zoomControl: false })
+const map = L.map("map", { zoomControl: false, minZoom: 1 })
   .setView([DEFAULT_ORIGIN.latitude, DEFAULT_ORIGIN.longitude], 13);
 
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19,
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+L.maplibreGL({
+  style: "https://tiles.openfreemap.org/styles/bright",
+  attribution: '&copy; OpenStreetMap contributors &copy; OpenFreeMap',
 }).addTo(map);
 
 L.control.zoom({ position: "bottomright" }).addTo(map);
@@ -168,9 +168,9 @@ function formatEventDate(value) {
 function createEventMarker(event) {
   const markerIcon = L.divIcon({
     className: "",
-    html: `<div class="event-map-marker"><span>${event.votes}</span></div>`,
-    iconSize: [38, 38],
-    iconAnchor: [19, 19],
+    html: `<div class="event-map-marker-wrap"><div class="event-map-marker${event.tier === "paid" ? " promoted" : ""}"><span>${event.votes}</span></div></div>`,
+    iconSize: [36, 42],
+    iconAnchor: [18, 39],
   });
   const marker = L.marker([event.latitude, event.longitude], { icon: markerIcon }).addTo(map);
   const popup = document.createElement("div");
@@ -264,9 +264,9 @@ function renderEvents() {
     if (!event) continue;
     marker.setIcon(L.divIcon({
       className: "",
-      html: `<div class="event-map-marker${event.id === selectedEventId ? " active" : ""}"><span>${event.votes}</span></div>`,
-      iconSize: [38, 38],
-      iconAnchor: [19, 19],
+      html: `<div class="event-map-marker-wrap"><div class="event-map-marker${event.id === selectedEventId ? " active" : ""}${event.tier === "paid" ? " promoted" : ""}"><span>${event.votes}</span></div></div>`,
+      iconSize: [36, 42],
+      iconAnchor: [18, 39],
     }));
   }
 }
