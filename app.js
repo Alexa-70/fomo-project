@@ -151,7 +151,17 @@ function formatDuration(seconds) {
 }
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, options);
+  const apiUrl = `${API_BASE_URL}${path}`;
+  let response;
+  try {
+    response = await fetch(apiUrl, options);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      const backendUrl = API_BASE_URL || window.location.origin;
+      throw new Error(`Nu mă pot conecta la backendul FOMO (${backendUrl}). Pornește backendul cu .\\start.ps1 și reîncarcă pagina.`);
+    }
+    throw error;
+  }
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Cererea către server nu a reușit.");
   return data;
