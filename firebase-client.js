@@ -63,9 +63,27 @@
         return savedProfile.val();
       },
       locations: async () => {
-        const snapshot = await db.ref("locations").once("value");
+        const [snapshot, catalogResponse] = await Promise.all([
+          db.ref("locations").once("value"),
+          fetch("./locations.json"),
+        ]);
+        if (!catalogResponse.ok) {
+          throw new Error(`Catalogul foto nu a putut fi încărcat (${catalogResponse.status}).`);
+        }
+        const catalog = await catalogResponse.json();
+        if (!Array.isArray(catalog)) {
+          throw new Error("Catalogul foto are un format invalid.");
+        }
+        const catalogById = new Map(catalog.map((location) => [location.id, location]));
         return Object.entries(snapshot.val() || {})
-          .map(([id, location]) => ({ id, ...location }))
+          .map(([id, location]) => {
+            const catalogLocation = catalogById.get(id);
+            return {
+              id,
+              ...location,
+              imageUrl: location.imageUrl || catalogLocation?.imageUrl,
+            };
+          })
           .sort((left, right) =>
             left.city.localeCompare(right.city, "ro") ||
             left.name.localeCompare(right.name, "ro")

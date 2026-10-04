@@ -534,18 +534,73 @@ h1 {
   background: var(--accent-deep);
 }
 
-.location-map-marker {
-  fill: #5cc9dc;
-  fill-opacity: 0.92;
-  stroke: #10202b;
-  stroke-width: 2.5;
-  vector-effect: non-scaling-stroke;
+.location-map-pin {
+  border: 0;
+  background: transparent;
 }
 
-.location-map-marker:hover {
-  fill: #a0f0f5;
-  stroke: #f7f8fa;
-  stroke-width: 3;
+.location-map-pin svg {
+  display: block;
+  width: 40px;
+  height: 52px;
+  overflow: visible;
+  filter: drop-shadow(0 2px 3px rgba(32, 29, 51, 0.42));
+  transition: transform 140ms ease, filter 140ms ease;
+  transform-origin: 50% 98%;
+}
+
+.location-map-pin-shape {
+  fill: #e53935;
+  stroke: #fffdf6;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.location-map-pin-category {
+  stroke: #fffdf6;
+  pointer-events: none;
+}
+
+.location-map-pin:hover svg {
+  filter: drop-shadow(0 3px 5px rgba(32, 29, 51, 0.5));
+  transform: scale(1.12);
+}
+
+.location-map-tooltip.leaflet-tooltip {
+  max-width: min(240px, calc(100vw - 32px));
+  border: 1px solid rgba(32, 29, 51, 0.14);
+  border-radius: 12px;
+  padding: 8px;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 0 8px 24px rgba(32, 29, 51, 0.2);
+}
+
+.location-map-tooltip.leaflet-tooltip-top::before {
+  border-top-color: var(--paper);
+}
+
+.location-tooltip {
+  display: grid;
+  width: 220px;
+  gap: 6px;
+}
+
+.location-tooltip img {
+  display: block;
+  width: 100%;
+  height: 120px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.location-tooltip strong {
+  font-size: 13px;
+}
+
+.location-tooltip span {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .user-map-marker {
@@ -597,15 +652,15 @@ h1 {
 .marker-cluster-small div,
 .marker-cluster-medium div,
 .marker-cluster-large div {
-  background-color: rgba(92, 201, 220, 0.86);
-  color: #10202b;
+  background-color: rgba(229, 57, 53, 0.88);
+  color: #fffdf6;
   font-weight: 750;
 }
 
 .marker-cluster-small,
 .marker-cluster-medium,
 .marker-cluster-large {
-  background-color: rgba(92, 201, 220, 0.3);
+  background-color: rgba(229, 57, 53, 0.28);
 }
 
 .leaflet-popup-content-wrapper, .leaflet-popup-tip {
