@@ -104,7 +104,7 @@ try {
     }
   }
 
-  Write-Output "Smoke test passed: API, Firebase assets, empty demo event catalog and 90 seeded locations are valid."
+  Write-Output "Smoke test passed: API, Firebase assets, event catalog ($($eventResults.Count) events) and 90 seeded locations are valid."
 }
 finally {
   if ($null -ne $serverProcess -and -not $serverProcess.HasExited) {

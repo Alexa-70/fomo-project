@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:5101";
+const API_BASE_URL = window.location.origin;
 const DEFAULT_ORIGIN = { latitude: 46.7712, longitude: 23.6236 };
 const PROFILE_VISITS_KEY = "fomo-place-visits-v1";
 
@@ -8,6 +8,9 @@ const originHint = document.querySelector("#origin-hint");
 const locateButton = document.querySelector("#locate-button");
 const eventList = document.querySelector("#event-list");
 const eventCount = document.querySelector("#event-count");
+const eventSearchInput = document.querySelector("#event-search");
+const communityList = document.querySelector("#community-list");
+const categoryFilterButtons = document.querySelectorAll(".category-filter");
 const statusMessage = document.querySelector("#status-message");
 const mapHint = document.querySelector("#map-hint");
 const recenterButton = document.querySelector("#recenter-button");
@@ -18,6 +21,7 @@ const map = L.map("map", {
   scrollWheelZoom: true,
   touchZoom: true,
   minZoom: 1,
+  maxZoom: 19,
 })
   .setView([DEFAULT_ORIGIN.latitude, DEFAULT_ORIGIN.longitude], 13);
 
@@ -53,6 +57,8 @@ recenterButton.addEventListener("click", () => {
 let origin = { ...DEFAULT_ORIGIN };
 let events = [];
 let selectedEventId = null;
+let activeCategory = "all";
+let eventSearchQuery = "";
 let routeLayer = null;
 let originMarker = null;
 let routeDestinationMarker = null;
@@ -133,6 +139,44 @@ function formatEventDate(value) {
   }).format(date);
 }
 
+function normalizeCategory(category) {
+  if (!category) return "";
+  const normalized = category.trim();
+  const aliases = {
+    "Muzică": "Music",
+    "Outdoor": "Sports",
+    "Film": "Cinema",
+    "Food & drink": "Food & Drink",
+    "Food & Drink": "Food & Drink",
+    "Food & drink ": "Food & Drink",
+    "Party & Nightlife": "Party",
+    "Sports & Outdoor": "Sports",
+    "Cinema & Cultură": "Cinema",
+    "Live Music & Stand-up": "Music",
+    "Board Games & Quiz": "Quiz",
+    "Board Games": "Quiz",
+    "Workshops & Networking": "Social",
+  };
+  return aliases[normalized] || normalized;
+}
+
+function getCategoryTagClass(category) {
+  switch (normalizeCategory(category)) {
+    case "Social": return "tag-social";
+    case "Food & Drink": return "tag-food";
+    case "Party": return "tag-party";
+    case "Sports": return "tag-sports";
+    case "Cinema": return "tag-cinema";
+    case "Quiz": return "tag-quiz";
+    case "Community": return "tag-social";
+    default: return "tag-default";
+  }
+}
+
+function isCommunityEvent(event) {
+  return Boolean(event.isCommunity) || event.source === "community" || normalizeCategory(event.category) === "Community";
+}
+
 /* ==================== MARKERE ==================== */
 function createEventMarker(event) {
   const markerIcon = L.divIcon({
@@ -206,7 +250,9 @@ function setMapLocations(locations) {
   }
 
   const cities = new Set(validLocations.map((location) => location.city));
-  locationCount.textContent = `${validLocations.length} locații · ${cities.size} orașe`;
+  if (locationCount) {
+    locationCount.textContent = `${validLocations.length} locații · ${cities.size} orașe`;
+  }
   if (!hasFitLocationBounds && validLocations.length) {
     hasFitLocationBounds = true;
     map.fitBounds(
@@ -222,7 +268,7 @@ function createEventCard(event) {
   if (event.id === selectedEventId) card.classList.add("selected");
 
   const heading = createElement("div", "event-card-heading");
-  const category = createElement("span", "event-category", event.category);
+  const category = createElement("span", `event-category ${getCategoryTagClass(event.category)}`, normalizeCategory(event.category) || event.category);
   const tier = createElement(
     "span",
     `event-tier${event.tier === "paid" ? " promoted" : ""}`,
@@ -231,12 +277,20 @@ function createEventCard(event) {
   heading.append(category, tier);
 
   const title = createElement("h3", "event-title", event.title);
-  const description = createElement("p", "event-description", event.description);
+  const communityEvent = isCommunityEvent(event);
+  const descriptionText = communityEvent
+    ? `${event.activity || event.description} • Propus de ${event.proposerName || "cineva"}`
+    : event.description;
+  const description = createElement("p", "event-description", descriptionText);
   const details = createElement("div", "event-details");
   details.append(
     createElement("span", "", `${formatEventDate(event.startsAt)}`),
     createElement("span", "", event.venue),
   );
+  if (communityEvent && (event.proposerName || event.activity)) {
+    const communityMeta = createElement("div", "event-community-meta", `${event.proposerName || "Comunitate"} • ${event.activity || "activitate spontană"}`);
+    details.append(communityMeta);
+  }
 
   const actions = createElement("div", "event-actions");
   const voteButton = createElement("button", `vote-button${event.votedByMe ? " voted" : ""}`);
@@ -282,32 +336,121 @@ function createEventCard(event) {
   return card;
 }
 
+function getFilteredEvents() {
+  const query = eventSearchQuery.trim().toLowerCase();
+  const showPromoted = window.FomoSettings ? window.FomoSettings.showPromoted !== false : true;
+
+  return [...events]
+    .filter((event) => !isCommunityEvent(event))
+    .filter((event) => {
+      if (!showPromoted && event.tier === "paid") return false;
+
+      const eventCategory = normalizeCategory(event.category);
+      const matchesCategory = activeCategory === "all" || eventCategory === activeCategory;
+      if (!matchesCategory) return false;
+      if (!query) return true;
+
+      const searchableText = [
+        event.title,
+        event.description,
+        event.activity,
+        event.proposerName,
+        eventCategory,
+        event.category,
+        event.venue,
+      ].join(" ").toLowerCase();
+
+      return searchableText.includes(query);
+    })
+    .sort((left, right) => right.votes - left.votes || left.title.localeCompare(right.title, "ro"));
+}
+
+function getCommunityEvents() {
+  const query = eventSearchQuery.trim().toLowerCase();
+
+  return [...events]
+    .filter(isCommunityEvent)
+    .filter((event) => {
+      if (activeCategory !== "all" && activeCategory !== "Community") {
+        if (normalizeCategory(event.category) !== activeCategory) return false;
+      }
+      if (!query) return true;
+      const searchableText = [
+        event.title,
+        event.description,
+        event.activity,
+        event.proposerName,
+        event.venue,
+      ].join(" ").toLowerCase();
+      return searchableText.includes(query);
+    })
+    .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+}
+
 function renderEvents() {
-  events.sort((left, right) => right.votes - left.votes || left.title.localeCompare(right.title, "ro"));
-  eventList.replaceChildren();
-  eventCount.textContent = String(events.length);
-  if (events.length === 0) {
-    eventList.append(createElement("p", "loading-events", "Nu sunt evenimente disponibile momentan."));
-    return;
+  const filteredEvents = getFilteredEvents();
+  const communityEvents = getCommunityEvents();
+  const visibleIds = new Set(filteredEvents.map((event) => event.id));
+
+  if (selectedEventId && !visibleIds.has(selectedEventId) && !communityEvents.some((event) => event.id === selectedEventId)) {
+    selectedEventId = null;
   }
-  for (const event of events) eventList.append(createEventCard(event));
+
+  eventList.replaceChildren();
+  eventCount.textContent = String(filteredEvents.length);
+
+  if (filteredEvents.length === 0) {
+    const emptyMessage = eventSearchQuery
+      ? `Nu există evenimente care corespund căutării „${eventSearchQuery}”.`
+      : "Nu sunt evenimente disponibile pentru filtrul selectat.";
+    eventList.append(createElement("p", "loading-events", emptyMessage));
+  } else {
+    for (const event of filteredEvents) eventList.append(createEventCard(event));
+  }
+
+  if (communityList) {
+    communityList.replaceChildren();
+    if (communityEvents.length === 0) {
+      communityList.append(createElement("p", "loading-events", "Nicio sugestie de comunitate nu se potrivește filtrului."));
+    } else {
+      for (const event of communityEvents) communityList.append(createEventCard(event));
+    }
+  }
 
   for (const [id, marker] of eventMarkers) {
     const event = events.find((item) => item.id === id);
     if (!event) continue;
+
+    const isVisible = visibleIds.has(id) || communityEvents.some((item) => item.id === id);
+    if (!isVisible) {
+      if (map.hasLayer(marker)) map.removeLayer(marker);
+      continue;
+    }
+
+    if (!map.hasLayer(marker)) map.addLayer(marker);
+
     marker.setIcon(L.divIcon({
       className: "",
-      html: `<div class="event-map-marker-wrap"><div class="event-map-marker${event.id === selectedEventId ? " active" : ""}${event.tier === "paid" ? " promoted" : ""}"><span>${event.votes}</span></div></div>`,
+      html: `<div class="event-map-marker-wrap"><div class="event-map-marker${isCommunityEvent(event) ? " community" : ""}${event.id === selectedEventId ? " active" : ""}${event.tier === "paid" ? " promoted" : ""}"><span>${event.votes || 0}</span></div></div>`,
       iconSize: [36, 42],
       iconAnchor: [18, 39],
     }));
   }
 }
 
+window.renderEvents = renderEvents;
+
 function selectEvent(eventId, openPopup) {
-  selectedEventId = eventId;
   const event = events.find((item) => item.id === eventId);
   if (!event) return;
+
+  const isVisible = getFilteredEvents().some((item) => item.id === eventId)
+    || getCommunityEvents().some((item) => item.id === eventId);
+  if (!isVisible) {
+    return;
+  }
+
+  selectedEventId = eventId;
   if (openPopup) recordPlaceVisit(event);
   renderEvents();
   const marker = eventMarkers.get(eventId);
@@ -531,6 +674,19 @@ window.FomoRouteContext = {
   },
   setStatus,
 };
+
+categoryFilterButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    activeCategory = button.dataset.category;
+    categoryFilterButtons.forEach((item) => item.classList.toggle("active", item === button));
+    renderEvents();
+  });
+});
+
+eventSearchInput.addEventListener("input", (event) => {
+  eventSearchQuery = event.target.value;
+  renderEvents();
+});
 
 window.FomoRefreshCommunityEvents = (communityEvents) => {
   events = events.filter((event) => event.source !== "community").concat(communityEvents);
