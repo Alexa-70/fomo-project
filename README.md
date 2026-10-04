@@ -54,7 +54,8 @@ Caută până la cinci locații prin Nominatim și întoarce numele și coordona
 ### `POST /api/routes`
 
 Primește coordonatele selectate:
-
+//matamatamare
+//o bag in soare
 ```json
 {
   "origin": { "latitude": 46.7712, "longitude": 23.6236 },
@@ -117,3 +118,8 @@ Cele 90 de locații sunt afișate ca puncte cyan grupate pe hartă; la încărca
 ## Configurare
 
 Serviciile publice Nominatim și OSRM sunt pentru utilizare modestă și dezvoltare, nu oferă SLA și au limite de utilizare. Folosește servicii găzduite/autorizate pentru trafic de producție. Opțional, backendul acceptă variabilele de mediu `NOMINATIM_BASE_URL`, `NOMINATIM_USER_AGENT` și `OSRM_BASE_URL`. Configurează un User-Agent care identifică aplicația și un contact pentru distribuție publică.
+
+
+// pun la comentarii de test
+//
+//gay
