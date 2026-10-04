@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://tiles.openfreemap.org" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
-    <link rel="stylesheet" href="./styles.css?v=floating-v1" />
+    <link rel="stylesheet" href="./styles.css?v=floating-v2" />
     <link rel="stylesheet" href="./settings-panel.css" />
     <link rel="stylesheet" href="./event-workflow.css" />
     <link rel="stylesheet" href="./ai-assistant.css" />
@@ -70,8 +70,37 @@
               </div>
               <span class="event-count" id="event-count">—</span>
             </div>
+
+            <div class="event-toolbar" aria-label="Caută și filtrează evenimente">
+              <label class="event-search" for="event-search">
+                <span aria-hidden="true">⌕</span>
+                <input id="event-search" type="search" placeholder="Caută evenimente" autocomplete="off" />
+              </label>
+
+              <div class="category-filters" role="group" aria-label="Filtrează după categorie">
+                <button class="category-filter active" type="button" data-category="all">Toate</button>
+                <button class="category-filter" type="button" data-category="Social">Social</button>
+                <button class="category-filter" type="button" data-category="Food &amp; Drink">Food &amp; Drink</button>
+                <button class="category-filter" type="button" data-category="Party">Party</button>
+                <button class="category-filter" type="button" data-category="Sports">Sports</button>
+                <button class="category-filter" type="button" data-category="Cinema">Cinema</button>
+                <button class="category-filter" type="button" data-category="Quiz">Quiz</button>
+                <button class="category-filter" type="button" data-category="Community">Community</button>
+              </div>
+            </div>
+
             <div class="event-list" id="event-list" aria-live="polite">
               <p class="loading-events">Se încarcă pulsul orașului...</p>
+            </div>
+
+            <div class="community-section" id="community-section">
+              <div class="community-header">
+                <div>
+                  <p class="eyebrow">Community</p>
+                  <h3>Propus de comunitate</h3>
+                </div>
+              </div>
+              <div class="community-list" id="community-list" aria-live="polite"></div>
             </div>
           </section>
         </div>
@@ -106,8 +135,8 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/dist/leaflet-maplibre-gl.js"></script>
-    <script src="./app.js?v=floating-v1"></script>
-    <script src="./settings-panel.js"></script>
+    <script src="./app.js?v=floating-v2"></script>
+    <script src="./settings-panel.js?v=floating-v2"></script>
     <script src="./event-workflow.js"></script>
     <script src="./route-planner.js"></script>
     <script src="./ai-assistant.js"></script>

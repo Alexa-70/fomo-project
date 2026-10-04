@@ -205,6 +205,9 @@ function Invoke-MapRequest {
             latitude = [double]$event.latitude
             longitude = [double]$event.longitude
             votes = $eventVotes.Count
+            isCommunity = [bool]($event.isCommunity)
+            proposerName = if ($null -ne $event.proposerName) { [string]$event.proposerName } else { $null }
+            activity = if ($null -ne $event.activity) { [string]$event.activity } else { $null }
           }
         }
       )
@@ -388,6 +391,9 @@ $contextJson
           tier = $event.tier
           votes = $eventVotes.Count
           votedByMe = (-not [string]::IsNullOrWhiteSpace($voterId)) -and ($eventVotes -contains $voterId)
+          isCommunity = [bool]($event.isCommunity)
+          proposerName = if ($null -ne $event.proposerName) { [string]$event.proposerName } else { $null }
+          activity = if ($null -ne $event.activity) { [string]$event.activity } else { $null }
         }
       }
     )
