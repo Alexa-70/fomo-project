@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:5055";
+const API_BASE_URL = "http://localhost:5101";
 const DEFAULT_ORIGIN = { latitude: 46.7712, longitude: 23.6236 };
 
 const originInput = document.querySelector("#origin");
@@ -241,7 +241,7 @@ function createEventCard(event) {
   routeButton.addEventListener("click", async (clickEvent) => {
     clickEvent.stopPropagation();
     selectEvent(event.id, false);
-    await showRoute(event);
+    await window.FomoRoutePlanner.showRoute(event);
   });
   actions.append(voteButton, routeButton);
   card.append(heading, title, description, details, actions);
@@ -315,6 +315,7 @@ function showSuggestions(results) {
     button.setAttribute("role", "option");
     button.addEventListener("click", () => {
       originInput.value = result.displayName;
+      originInput.dataset.selectedQuery = result.displayName;
       origin = { latitude: Number(result.latitude), longitude: Number(result.longitude) };
       originHint.textContent = "Punct de plecare selectat";
       hideSuggestions();
@@ -329,6 +330,9 @@ function showSuggestions(results) {
 originInput.addEventListener("input", () => {
   clearTimeout(searchTimer);
   const query = originInput.value.trim();
+  if (query !== originInput.dataset.selectedQuery) {
+    delete originInput.dataset.selectedQuery;
+  }
   const requestId = ++searchRequestId;
   if (query.length < 3) {
     hideSuggestions();
@@ -373,6 +377,7 @@ locateButton.addEventListener("click", () => {
     ({ coords }) => {
       origin = { latitude: coords.latitude, longitude: coords.longitude };
       originInput.value = "";
+      delete originInput.dataset.selectedQuery;
       originHint.textContent = "Folosim locația ta actuală";
       locateButton.disabled = false;
       map.setView([origin.latitude, origin.longitude], 14);
@@ -398,18 +403,6 @@ locateButton.addEventListener("click", () => {
   );
 });
 
-async function resolveOrigin() {
-  const query = originInput.value.trim();
-  if (!query) return origin;
-  const results = await searchPlaces(query);
-  if (results.length === 0) throw new Error(`Nu am găsit locația „${query}”. Încearcă o adresă sau un oraș mai precis.`);
-  const result = results[0];
-  originInput.value = result.displayName;
-  originHint.textContent = "Punct de plecare selectat";
-  origin = { latitude: Number(result.latitude), longitude: Number(result.longitude) };
-  return origin;
-}
-
 function clearRoute() {
   if (routeLayer) map.removeLayer(routeLayer);
   if (originMarker) map.removeLayer(originMarker);
@@ -419,55 +412,22 @@ function clearRoute() {
   routeDestinationMarker = null;
 }
 
-function createRouteMarker(label, destination = false) {
-  return L.divIcon({
-    className: "",
-    html: `<div class="route-marker${destination ? " destination" : ""}"><span>${label}</span></div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 27],
-  });
-}
-
-async function showRoute(event) {
-  setStatus(`Calculăm traseul către ${event.title}...`);
-  mapHint.textContent = "Se calculează traseul...";
-  document.querySelectorAll(".event-route-button").forEach((button) => {
-    button.disabled = true;
-  });
-  try {
-    const start = await resolveOrigin();
-    const route = await apiRequest("/api/routes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        origin: start,
-        destination: { latitude: event.latitude, longitude: event.longitude },
-      }),
-    });
-    clearRoute();
-    routeLayer = L.geoJSON(route.geometry, {
-      style: { color: "#b5dc38", weight: 6, opacity: 0.92, lineCap: "round", lineJoin: "round" },
-    }).addTo(map);
-    originMarker = L.marker([start.latitude, start.longitude], { icon: createRouteMarker("A") }).addTo(map);
-    const eventMarker = eventMarkers.get(event.id);
-    routeDestinationMarker = L.marker([event.latitude, event.longitude], {
-      icon: createRouteMarker("E", true),
-    }).addTo(map);
-    const bounds = L.featureGroup([routeLayer, originMarker, routeDestinationMarker]).getBounds();
-    map.fitBounds(bounds.pad(0.16), { maxZoom: 15 });
-
-    mapHint.textContent = `${formatDistance(route.distanceMeters)} · ${formatDuration(route.durationSeconds)} până la eveniment`;
-    setStatus(`Traseu către „${event.title}”: ${formatDistance(route.distanceMeters)}, aproximativ ${formatDuration(route.durationSeconds)}.`, "success");
-    if (eventMarker) eventMarker.closePopup();
-  } catch (error) {
-    mapHint.textContent = `${event.title} · ${event.venue}`;
-    setStatus(error.message, "error");
-  } finally {
-    document.querySelectorAll(".event-route-button").forEach((button) => {
-      button.disabled = false;
-    });
-  }
-}
+window.FomoRouteContext = {
+  apiRequest,
+  clearRoute,
+  formatDistance,
+  formatDuration,
+  map,
+  mapHint,
+  originHint,
+  originInput,
+  getOrigin: () => origin,
+  getEventMarker: (eventId) => eventMarkers.get(eventId),
+  setOrigin: (nextOrigin) => {
+    origin = nextOrigin;
+  },
+  setStatus,
+};
 
 async function initialize() {
   try {

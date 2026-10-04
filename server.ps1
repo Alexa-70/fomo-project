@@ -1,5 +1,5 @@
 param(
-  [int]$Port = 5055,
+  [int]$Port = 5101,
   [string]$OsrmBaseUrl = $(if ($env:OSRM_BASE_URL) { $env:OSRM_BASE_URL } else { "https://router.project-osrm.org" }),
   [string]$NominatimBaseUrl = $(if ($env:NOMINATIM_BASE_URL) { $env:NOMINATIM_BASE_URL } else { "https://nominatim.openstreetmap.org" }),
   [string]$NominatimUserAgent = $(if ($env:NOMINATIM_USER_AGENT) { $env:NOMINATIM_USER_AGENT } else { "RouteMateMap/1.0 (local development)" })
@@ -108,6 +108,37 @@ function Invoke-MapRequest {
   }
 
   $path = $request.Url.AbsolutePath.TrimEnd("/")
+  if ($request.HttpMethod -eq "GET" -and ($path -eq "" -or $path -notlike "/api/*" -and $path -ne "/health")) {
+    $relativePath = if ($path -eq "") { "index.html" } else { [Uri]::UnescapeDataString($path.TrimStart("/")) }
+    $webRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
+    $webRootPrefix = $webRoot + [System.IO.Path]::DirectorySeparatorChar
+    $filePath = [System.IO.Path]::GetFullPath((Join-Path $webRoot $relativePath))
+    $extension = [System.IO.Path]::GetExtension($filePath).ToLowerInvariant()
+    $contentType = switch ($extension) {
+      ".html" { "text/html; charset=utf-8" }
+      ".js" { "text/javascript; charset=utf-8" }
+      ".css" { "text/css; charset=utf-8" }
+      default { $null }
+    }
+
+    if (
+      $filePath.StartsWith($webRootPrefix, [System.StringComparison]::OrdinalIgnoreCase) -and
+      $null -ne $contentType -and
+      (Test-Path -LiteralPath $filePath -PathType Leaf)
+    ) {
+      $bytes = [System.IO.File]::ReadAllBytes($filePath)
+      $response.StatusCode = 200
+      $response.ContentType = $contentType
+      $response.ContentLength64 = $bytes.Length
+      $response.OutputStream.Write($bytes, 0, $bytes.Length)
+      $response.Close()
+      return
+    }
+
+    Write-JsonResponse -Context $Context -StatusCode 404 -Body @{ error = "File not found." }
+    return
+  }
+
   if ($path -eq "/health" -and $request.HttpMethod -eq "GET") {
     Write-JsonResponse -Context $Context -StatusCode 200 -Body @{ status = "ok" }
     return
