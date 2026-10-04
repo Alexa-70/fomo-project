@@ -672,6 +672,10 @@ h1 {
   box-shadow: 0 8px 24px rgba(32, 29, 51, 0.2);
 }
 
+.leaflet-container.location-popup-open .location-map-tooltip {
+  display: none !important;
+}
+
 .location-map-tooltip.leaflet-tooltip-top::before {
   border-top-color: var(--paper);
 }

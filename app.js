@@ -21,34 +21,41 @@ const map = L.map("map", {
 })
   .setView([DEFAULT_ORIGIN.latitude, DEFAULT_ORIGIN.longitude], 13);
 
-const baseMapLayer = L.maplibreGL({
-  style: "https://tiles.openfreemap.org/styles/bright",
-  attribution: '&copy; OpenStreetMap contributors &copy; OpenFreeMap',
-}).addTo(map);
-const vectorMap = baseMapLayer.getMaplibreMap();
+if (typeof L.maplibreGL === "function") {
+  const baseMapLayer = L.maplibreGL({
+    style: "https://tiles.openfreemap.org/styles/bright",
+    attribution: '&copy; OpenStreetMap contributors &copy; OpenFreeMap',
+  }).addTo(map);
+  const vectorMap = baseMapLayer.getMaplibreMap();
 
-function applyFomoMapTheme() {
-  if (!vectorMap.isStyleLoaded()) return;
+  function applyFomoMapTheme() {
+    if (!vectorMap.isStyleLoaded()) return;
 
-  const layerColors = {
-    background: ["background-color", "#fffdfa"],
-    park: ["fill-color", "#f5d5b8"],
-    "landcover-grass-park": ["fill-color", "#f9e7d7"],
-    "landcover-grass": ["fill-color", "#e9eadf"],
-    "landcover-wood": ["fill-color", "#dfe7d8"],
-    water: ["fill-color", "#c8dce8"],
-  };
+    const layerColors = {
+      background: ["background-color", "#fffdfa"],
+      park: ["fill-color", "#f5d5b8"],
+      "landcover-grass-park": ["fill-color", "#f9e7d7"],
+      "landcover-grass": ["fill-color", "#e9eadf"],
+      "landcover-wood": ["fill-color", "#dfe7d8"],
+      water: ["fill-color", "#c8dce8"],
+    };
 
-  for (const [layerId, [property, color]] of Object.entries(layerColors)) {
-    if (vectorMap.getLayer(layerId)) {
-      vectorMap.setPaintProperty(layerId, property, color);
+    for (const [layerId, [property, color]] of Object.entries(layerColors)) {
+      if (vectorMap.getLayer(layerId)) {
+        vectorMap.setPaintProperty(layerId, property, color);
+      }
     }
   }
-}
 
-vectorMap.on("style.load", () => requestAnimationFrame(applyFomoMapTheme));
-vectorMap.on("load", applyFomoMapTheme);
-if (vectorMap.isStyleLoaded()) applyFomoMapTheme();
+  vectorMap.on("style.load", () => requestAnimationFrame(applyFomoMapTheme));
+  vectorMap.on("load", applyFomoMapTheme);
+  if (vectorMap.isStyleLoaded()) applyFomoMapTheme();
+} else {
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  }).addTo(map);
+}
 
 // 🔥 FIX CRUCIAL: forțează Leaflet să calculeze dimensiunea corect
 setTimeout(() => map.invalidateSize(), 100);
@@ -77,6 +84,9 @@ recenterButton.addEventListener("click", () => {
 let origin = { ...DEFAULT_ORIGIN };
 let events = [];
 let selectedEventId = null;
+let routeLayer = null;
+let originMarker = null;
+let routeDestinationMarker = null;
 let userLocation = null;
 let userLocationMarker = null;
 let userLocationZoom = null;
@@ -88,6 +98,7 @@ const locationLayer = L.markerClusterGroup({
   maxClusterRadius: 34,
 }).addTo(map);
 let hasFitLocationBounds = false;
+const locationCount = document.querySelector("#map-location-count");
 let searchTimer = null;
 let searchRequestId = 0;
 
@@ -114,6 +125,20 @@ function setStatus(message, state = "") {
   statusMessage.textContent = message;
   if (state) statusMessage.dataset.state = state;
   else delete statusMessage.dataset.state;
+}
+
+function formatDistance(meters) {
+  return meters >= 1000
+    ? `${new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 1 }).format(meters / 1000)} km`
+    : `${Math.round(meters)} m`;
+}
+
+function formatDuration(seconds) {
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours === 0) return `${minutes} min`;
+  return remainingMinutes ? `${hours} h ${remainingMinutes} min` : `${hours} h`;
 }
 
 async function apiRequest(path, options = {}) {
@@ -184,34 +209,26 @@ function createLocationPopup(location) {
   if (!upcomingEvents.length) {
     popup.append(createElement("span", "map-popup-description", "Nu există evenimente verificate la această locație."));
   }
+  const routeDestination = {
+    id: location.id,
+    title: location.name,
+    venue: location.city,
+    latitude: Number(location.latitude),
+    longitude: Number(location.longitude),
+  };
   const routeButton = createElement("button", "event-route-button", "Cum ajung? ↗");
   routeButton.type = "button";
   routeButton.addEventListener("click", (clickEvent) => {
     clickEvent.stopPropagation();
-    window.FomoRoutePlanner.showRoute({
-      title: location.name,
-      venue: location.city,
-      latitude: Number(location.latitude),
-      longitude: Number(location.longitude),
-    });
+    window.FomoRoutePlanner.showRoute(routeDestination);
   });
   const transitButton = createElement("button", "event-route-button transit-route-button", "Transport public ↗");
   transitButton.type = "button";
   transitButton.addEventListener("click", (clickEvent) => {
     clickEvent.stopPropagation();
-    window.FomoRoutePlanner.showRoute({
-      title: location.name,
-      venue: location.city,
-      latitude: Number(location.latitude),
-      longitude: Number(location.longitude),
-    }, "TRANSIT");
+    window.FomoRoutePlanner.showRoute(routeDestination, "TRANSIT");
   });
-  const rideActions = window.FomoRideSharing.createActions({
-    title: location.name,
-    venue: location.city,
-    latitude: Number(location.latitude),
-    longitude: Number(location.longitude),
-  });
+  const rideActions = window.FomoRideSharing.createActions(routeDestination);
   rideActions.addEventListener("click", (clickEvent) => clickEvent.stopPropagation());
   popup.append(routeButton, transitButton, rideActions);
   return popup;
@@ -300,12 +317,24 @@ function setMapLocations(locations) {
       opacity: 1,
       className: "location-map-tooltip",
     });
+    marker.on("popupopen", () => {
+      map.getContainer().classList.add("location-popup-open");
+      marker.closeTooltip();
+    });
+    marker.on("popupclose", () => {
+      map.getContainer().classList.remove("location-popup-open");
+    });
     marker.on("click", () => {
+      marker.closeTooltip();
       mapHint.textContent = `${location.name} · ${location.city}`;
     });
     locationLayer.addLayer(marker);
   }
 
+  const cities = new Set(validLocations.map((location) => location.city));
+  if (locationCount) {
+    locationCount.textContent = `${validLocations.length} locații · ${cities.size} orașe`;
+  }
   if (!hasFitLocationBounds && validLocations.length) {
     hasFitLocationBounds = true;
     map.fitBounds(
@@ -369,10 +398,10 @@ function createEventCard(event) {
 
   const routeButton = createElement("button", "event-route-button", "Cum ajung? ↗");
   routeButton.type = "button";
-  routeButton.addEventListener("click", (clickEvent) => {
+  routeButton.addEventListener("click", async (clickEvent) => {
     clickEvent.stopPropagation();
     selectEvent(event.id, false);
-    window.FomoRoutePlanner.showRoute(event);
+    await window.FomoRoutePlanner.showRoute(event);
   });
   const transitButton = createElement("button", "event-route-button transit-route-button", "Transport public ↗");
   transitButton.type = "button";
@@ -616,24 +645,24 @@ function locateUser(isAutomatic = false) {
 
 locateButton.addEventListener("click", () => locateUser());
 
+function clearRoute() {
+  if (routeLayer) map.removeLayer(routeLayer);
+  if (routeDestinationMarker) map.removeLayer(routeDestinationMarker);
+  routeLayer = null;
+  routeDestinationMarker = null;
+}
+
 window.FomoRouteContext = {
   apiRequest,
-  formatDistance: (meters) => meters >= 1000
-    ? `${new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 1 }).format(meters / 1000)} km`
-    : `${Math.round(meters)} m`,
-  formatDuration: (seconds) => {
-    const minutes = Math.round(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    if (hours === 0) return `${minutes} min`;
-    return remainingMinutes ? `${hours} h ${remainingMinutes} min` : `${hours} h`;
-  },
-  getEventMarker: (eventId) => eventMarkers.get(eventId),
+  clearRoute,
+  formatDistance,
+  formatDuration,
   map,
   mapHint,
   originInput,
   originHint,
   getOrigin: () => ({ ...origin }),
+  getEventMarker: (eventId) => eventMarkers.get(eventId),
   setOrigin: (nextOrigin) => {
     origin = nextOrigin;
   },
@@ -653,7 +682,7 @@ async function initialize() {
   try {
     await apiRequest("/health");
     await loadEvents();
-    setStatus("Backend conectat. Calculează ruta auto pe hartă sau deschide transportul public în Google Maps.", "success");
+    setStatus("Backend conectat. Votează un plan sau calculează drumul către un eveniment.", "success");
   } catch (error) {
     eventList.replaceChildren(createElement("p", "loading-events", "Nu am putut încărca evenimentele."));
     setStatus(`${error.message} Pornește backendul cu .\\start.ps1.`, "error");
