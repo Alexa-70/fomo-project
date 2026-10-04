@@ -11,9 +11,9 @@ Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă
 .\start.ps1
 ```
 
-Backendul pornește la `http://localhost:5055/`. Lasă fereastra PowerShell deschisă cât folosești aplicația.
+Backendul pornește la `http://localhost:5101/`. Lasă fereastra PowerShell deschisă cât folosești aplicația.
 
-3. Deschide `index.html` în browser. Este necesară conexiune la internet pentru librăria Leaflet, căutarea locațiilor și dalele hărții.
+3. Deschide `http://localhost:5101/` în browser. Serverul local servește interfața și API-ul de pe aceeași origine, astfel încât browserul să poată cere permisiunea pentru locația curentă. Este necesară conexiune la internet pentru librăria Leaflet, căutarea locațiilor și dalele hărții.
 
 Dacă Windows blochează rularea scripturilor, pornește serverul explicit:
 
@@ -61,6 +61,8 @@ Primește coordonatele selectate:
 ```
 
 Răspunsul conține distanța, durata estimată, indicațiile și geometria GeoJSON `LineString` (coordonatele sunt perechi `[longitudine, latitudine]`). Interfața poate folosi locația browserului sau o adresă introdusă și afișează traseul până la evenimentul ales.
+
+Interacțiunea pentru alegerea originii, solicitarea traseului și desenarea acestuia pe hartă este izolată în `route-planner.js`. Utilizatorul poate apăsa „Folosește locația mea” pentru a permite accesul la locația browserului sau poate căuta o adresă; apoi butonul „Cum ajung?” calculează și afișează traseul către eveniment.
 
 ## Date demo și limite
 
