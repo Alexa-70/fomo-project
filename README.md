@@ -1,5 +1,8 @@
 # Locally — evenimente și trasee pe hartă
 
+Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar aplicația calculează drumul către evenimentul ales. Interfața folosește Leaflet și OpenStreetMap; backendul PowerShell oferă lista de evenimente și voturi, caută locații cu Nominatim și calculează rute auto cu OSRM.
+
+Navigarea este în bara de jos: **Acasă** afișează harta, iar **Funcții** deschide descoperirea evenimentelor, setările și instrumentele comunității. Codul barei de navigare este în `buttons-ui/`.
 Aplicație pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar aplicația calculează drumul către evenimentul ales. Interfața folosește Leaflet, MapLibre GL JS și stilul vectorial Bright de la OpenFreeMap (date OpenStreetMap). Backendul PowerShell caută locații cu Nominatim și calculează rute auto cu OSRM; Firebase Authentication și Realtime Database gestionează conturile, locațiile, cererile de owner și aprobarea evenimentelor.
 
 ## Pornire în Windows
@@ -10,9 +13,9 @@ Aplicație pentru descoperirea evenimentelor locale: evenimentele apar pe o hart
 .\start.ps1
 ```
 
-Backendul pornește la `http://localhost:5101/`. Lasă fereastra PowerShell deschisă cât folosești aplicația.
+Backendul pornește la `http://localhost:5055/`. Lasă fereastra PowerShell deschisă cât folosești aplicația.
 
-3. Deschide `http://localhost:5101/` în browser. Serverul local servește interfața și API-ul de pe aceeași origine, astfel încât browserul să poată cere permisiunea pentru locația curentă. Este necesară conexiune la internet pentru librăria Leaflet, căutarea locațiilor și dalele hărții.
+3. Deschide `index.html` în browser. Este necesară conexiune la internet pentru librăria Leaflet, căutarea locațiilor și dalele hărții.
 
 Dacă Windows blochează rularea scripturilor, pornește serverul explicit:
 

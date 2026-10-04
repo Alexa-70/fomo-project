@@ -1,5 +1,6 @@
 const API_BASE_URL = "http://localhost:5101";
 const DEFAULT_ORIGIN = { latitude: 46.7712, longitude: 23.6236 };
+const PROFILE_VISITS_KEY = "fomo-place-visits-v1";
 
 const originInput = document.querySelector("#origin");
 const originSuggestions = document.querySelector("#origin-suggestions");
@@ -9,9 +10,15 @@ const eventList = document.querySelector("#event-list");
 const eventCount = document.querySelector("#event-count");
 const statusMessage = document.querySelector("#status-message");
 const mapHint = document.querySelector("#map-hint");
+const recenterButton = document.querySelector("#recenter-button");
 
 /* ==================== HARTĂ LEAFLET ==================== */
-const map = L.map("map", { zoomControl: false, minZoom: 1, maxZoom: 19 })
+const map = L.map("map", {
+  zoomControl: false,
+  scrollWheelZoom: true,
+  touchZoom: true,
+  minZoom: 1,
+})
   .setView([DEFAULT_ORIGIN.latitude, DEFAULT_ORIGIN.longitude], 13);
 
 L.maplibreGL({
@@ -19,11 +26,28 @@ L.maplibreGL({
   attribution: '&copy; OpenStreetMap contributors &copy; OpenFreeMap',
 }).addTo(map);
 
-L.control.zoom({ position: "bottomright" }).addTo(map);
-
 // 🔥 FIX CRUCIAL: forțează Leaflet să calculeze dimensiunea corect
 setTimeout(() => map.invalidateSize(), 100);
 window.addEventListener("resize", () => map.invalidateSize());
+
+function updateRecenterButton() {
+  if (!userLocation) {
+    recenterButton.hidden = true;
+    return;
+  }
+
+  const locationPoint = map.latLngToContainerPoint([userLocation.latitude, userLocation.longitude]);
+  const mapCenter = map.getSize().divideBy(2);
+  const zoomedOut = map.getZoom() < userLocationZoom;
+  const mapMovedAway = mapCenter.distanceTo(locationPoint) > 48;
+  recenterButton.hidden = !zoomedOut && !mapMovedAway;
+}
+
+map.on("moveend zoomend", updateRecenterButton);
+recenterButton.addEventListener("click", () => {
+  if (!userLocation) return;
+  map.setView([userLocation.latitude, userLocation.longitude], userLocationZoom);
+});
 
 /* ==================== STARE GLOBALĂ ==================== */
 let origin = { ...DEFAULT_ORIGIN };
@@ -32,6 +56,9 @@ let selectedEventId = null;
 let routeLayer = null;
 let originMarker = null;
 let routeDestinationMarker = null;
+let userLocation = null;
+let userLocationMarker = null;
+let userLocationZoom = null;
 let eventMarkers = new Map();
 const locationLayer = L.markerClusterGroup({
   showCoverageOnHover: false,
@@ -61,78 +88,6 @@ const voterId = (() => {
   }
   return id;
 })();
-
-/* ==================== PANOU PLUTITOR (DRAG + MINIMIZE) ==================== */
-const floatingPanel = document.getElementById("floating-panel");
-const panelDragHandle = document.getElementById("panel-drag-handle");
-const panelToggle = document.getElementById("panel-toggle");
-
-panelToggle.addEventListener("click", () => {
-  floatingPanel.classList.toggle("minimized");
-  const isMin = floatingPanel.classList.contains("minimized");
-  panelToggle.querySelector(".toggle-icon").textContent = isMin ? "+" : "−";
-  panelToggle.setAttribute("aria-label", isMin ? "Maximizează panoul" : "Minimizează panoul");
-  setTimeout(() => map.invalidateSize(), 250);
-});
-
-let dragState = null;
-
-function getClientPoint(e) {
-  if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  return { x: e.clientX, y: e.clientY };
-}
-
-function startDrag(e) {
-  if (e.target.closest(".panel-toggle")) return;
-
-  const rect = floatingPanel.getBoundingClientRect();
-  const point = getClientPoint(e);
-
-  floatingPanel.style.left = rect.left + "px";
-  floatingPanel.style.top = rect.top + "px";
-  floatingPanel.style.right = "auto";
-  floatingPanel.style.bottom = "auto";
-  floatingPanel.style.transition = "none";
-
-  dragState = {
-    offsetX: point.x - rect.left,
-    offsetY: point.y - rect.top,
-  };
-
-  document.addEventListener("mousemove", onDragMove);
-  document.addEventListener("mouseup", endDrag);
-  document.addEventListener("touchmove", onDragMove, { passive: false });
-  document.addEventListener("touchend", endDrag);
-}
-
-function onDragMove(e) {
-  if (!dragState) return;
-  e.preventDefault();
-  const point = getClientPoint(e);
-  const panelWidth = floatingPanel.offsetWidth;
-  const panelHeight = floatingPanel.offsetHeight;
-
-  let newLeft = point.x - dragState.offsetX;
-  let newTop = point.y - dragState.offsetY;
-
-  newLeft = Math.max(8, Math.min(window.innerWidth - panelWidth - 8, newLeft));
-  newTop = Math.max(8, Math.min(window.innerHeight - panelHeight - 8, newTop));
-
-  floatingPanel.style.left = newLeft + "px";
-  floatingPanel.style.top = newTop + "px";
-}
-
-function endDrag() {
-  dragState = null;
-  floatingPanel.style.transition = "";
-  document.removeEventListener("mousemove", onDragMove);
-  document.removeEventListener("mouseup", endDrag);
-  document.removeEventListener("touchmove", onDragMove);
-  document.removeEventListener("touchend", endDrag);
-}
-
-panelDragHandle.addEventListener("mousedown", startDrag);
-panelDragHandle.addEventListener("touchstart", startDrag, { passive: true });
 
 /* ==================== UTILITARE ==================== */
 function setStatus(message, state = "") {
@@ -353,6 +308,7 @@ function selectEvent(eventId, openPopup) {
   selectedEventId = eventId;
   const event = events.find((item) => item.id === eventId);
   if (!event) return;
+  if (openPopup) recordPlaceVisit(event);
   renderEvents();
   const marker = eventMarkers.get(eventId);
   if (marker) {
@@ -362,6 +318,65 @@ function selectEvent(eventId, openPopup) {
   mapHint.textContent = `${event.title} · ${event.venue}`;
 }
 
+function recordPlaceVisit(event) {
+  try {
+    const storedVisits = localStorage.getItem(PROFILE_VISITS_KEY);
+    const visits = storedVisits ? JSON.parse(storedVisits) : [];
+    if (!Array.isArray(visits)) throw new Error("Stored place visits are not a list.");
+    const venue = String(event.venue || "").trim();
+    if (!venue) return;
+
+    const existingVisit = visits.find((visit) => visit.venue === venue);
+    if (existingVisit) {
+      existingVisit.count += 1;
+      existingVisit.eventTitle = event.title;
+      existingVisit.lastVisited = new Date().toISOString();
+    } else {
+      visits.push({
+        venue,
+        eventTitle: event.title,
+        count: 1,
+        lastVisited: new Date().toISOString(),
+      });
+    }
+    localStorage.setItem(PROFILE_VISITS_KEY, JSON.stringify(visits));
+  } catch (error) {
+    console.error("Could not save local place visits.", error);
+    setStatus("Nu am putut salva activitatea profilului în acest browser.", "error");
+  }
+}
+
+window.FomoSearch = {
+  search(query, category = "all") {
+    const normalizedQuery = query.trim().toLocaleLowerCase("ro");
+    return events.filter((event) =>
+      (category === "all" || matchesEventCategory(event.category, category)) &&
+      (!normalizedQuery || [event.title, event.venue, event.category, event.description]
+        .some((value) => String(value || "").toLocaleLowerCase("ro").includes(normalizedQuery)))
+    );
+  },
+  select(eventId) {
+    selectEvent(eventId, true);
+  },
+};
+
+function matchesEventCategory(category, filter) {
+  const normalizedCategory = String(category || "").toLocaleLowerCase("ro");
+  const categoryTerms = {
+    restaurants: ["food", "drink", "restaurant", "culinar", "gastronom"],
+    music: ["muzic", "music", "concert", "dj"],
+    meetups: ["social", "întâln", "intaln", "meetup", "network"],
+    outdoor: ["outdoor", "alerg", "sport", "drume", "natur"],
+    film: ["film", "cinema", "proiec"],
+  };
+  if (filter === "other") {
+    return !Object.values(categoryTerms).some((terms) =>
+      terms.some((term) => normalizedCategory.includes(term))
+    );
+  }
+  return (categoryTerms[filter] || []).some((term) => normalizedCategory.includes(term));
+}
+
 async function loadEvents() {
   const data = await apiRequest(`/api/events?voterId=${encodeURIComponent(voterId)}`);
   const communityEvents = events.filter((event) => event.source === "community");
@@ -369,7 +384,7 @@ async function loadEvents() {
   for (const marker of eventMarkers.values()) map.removeLayer(marker);
   eventMarkers = new Map(events.map((event) => [event.id, createEventMarker(event)]));
   renderEvents();
-  if (events.length) {
+  if (events.length && !userLocation) {
     const bounds = L.latLngBounds(events.map((event) => [event.latitude, event.longitude]));
     map.fitBounds(bounds.pad(0.2), { maxZoom: 14 });
   }
@@ -445,49 +460,58 @@ document.addEventListener("click", (event) => {
   if (!originSuggestions.parentElement.contains(event.target)) hideSuggestions();
 });
 
-locateButton.addEventListener("click", () => {
+function locateUser(isAutomatic = false) {
   if (!navigator.geolocation) {
     setStatus("Browserul nu oferă acces la locație. Caută adresa de plecare în câmp.", "error");
     return;
   }
-  locateButton.disabled = true;
+  if (!isAutomatic) locateButton.disabled = true;
   setStatus("Se determină locația ta...");
   navigator.geolocation.getCurrentPosition(
     ({ coords }) => {
       origin = { latitude: coords.latitude, longitude: coords.longitude };
+      userLocation = { ...origin };
       originInput.value = "";
       delete originInput.dataset.selectedQuery;
       originHint.textContent = "Folosim locația ta actuală";
       locateButton.disabled = false;
       map.setView([origin.latitude, origin.longitude], 14);
-      if (originMarker) map.removeLayer(originMarker);
-      originMarker = L.marker([origin.latitude, origin.longitude], {
-        icon: L.divIcon({
-          className: "",
-          html: '<div class="user-map-marker"><span></span></div>',
-          iconSize: [22, 22],
-          iconAnchor: [11, 11],
-        }),
-      }).addTo(map);
+      userLocationZoom = map.getZoom();
+      const userLocationIcon = L.divIcon({
+        className: "",
+        html: '<div class="user-map-marker"><span></span></div>',
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+      });
+      if (userLocationMarker) {
+        userLocationMarker.setLatLng([userLocation.latitude, userLocation.longitude]);
+      } else {
+        userLocationMarker = L.marker([userLocation.latitude, userLocation.longitude], {
+          icon: userLocationIcon,
+          zIndexOffset: 1000,
+          interactive: false,
+        }).addTo(map);
+      }
+      updateRecenterButton();
       setStatus("Locația ta a fost setată ca punct de plecare.", "success");
     },
     (error) => {
       locateButton.disabled = false;
       const message = error.code === error.PERMISSION_DENIED
-        ? "Accesul la locație a fost refuzat. Poți introduce manual adresa."
-        : "Nu am putut determina locația. Poți introduce manual adresa.";
+        ? "Accesul la locație a fost refuzat. Permite locația în browser sau introdu manual adresa."
+        : "Nu am putut determina locația. Verifică setările browserului sau introdu manual adresa.";
       setStatus(message, "error");
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
   );
-});
+}
+
+locateButton.addEventListener("click", () => locateUser());
 
 function clearRoute() {
   if (routeLayer) map.removeLayer(routeLayer);
-  if (originMarker) map.removeLayer(originMarker);
   if (routeDestinationMarker) map.removeLayer(routeDestinationMarker);
   routeLayer = null;
-  originMarker = null;
   routeDestinationMarker = null;
 }
 
@@ -529,3 +553,4 @@ async function initialize() {
 }
 
 initialize();
+locateUser(true);

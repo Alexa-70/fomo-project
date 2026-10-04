@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#090b12" />
+    <meta name="theme-color" content="#fbf5e6" />
     <title>FOMO — Localuri și Evenimente Live</title>
     <link rel="preconnect" href="https://unpkg.com" />
     <link rel="preconnect" href="https://tiles.openfreemap.org" />
@@ -11,6 +11,10 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
+    <link rel="stylesheet" href="./styles.css?v=warm-palette-v1" />
+    <link rel="stylesheet" href="./settings-panel.css?v=warm-palette-v1" />
+    <link rel="stylesheet" href="./event-workflow.css?v=warm-palette-v1" />
+    <link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=friends-list-v1" />
     <link rel="stylesheet" href="./styles.css?v=floating-v1" />
     <link rel="stylesheet" href="./settings-panel.css" />
     <link rel="stylesheet" href="./event-workflow.css" />
@@ -22,26 +26,21 @@
     <div id="map" role="application" aria-label="Hartă interactivă cu evenimente"></div>
 
     <!-- Overlay-uri peste hartă -->
-    <div class="map-badge"><span class="map-live-dot"></span>Vibe Map Live<span class="map-location-count" id="map-location-count">Se încarcă locațiile...</span></div>
-    <div class="map-hint" id="map-hint">Selectează un local pentru a vedea comunitatea și traseul</div>
+    <div class="map-badge"><span class="map-live-dot"></span>Vibe Map Live</div>
+    <div class="map-hint" id="map-hint"></div>
 
-    <!-- BULA PLUTITOARE (panoul mutat aici) -->
+    <!-- Panoul cu funcțiile suplimentare -->
     <aside class="floating-panel" id="floating-panel">
-      <!-- Header cu drag handle -->
-      <header class="panel-header" id="panel-drag-handle">
-        <a class="brand" href="#" aria-label="FOMO, acasă">
+      <header class="panel-header">
+        <a class="brand" href="#" aria-label="FOMO">
           <span class="brand-mark" aria-hidden="true">🔥</span>
           <span>FOMO</span>
         </a>
-        <button class="panel-toggle" id="panel-toggle" type="button" aria-label="Minimizează panoul">
-          <span class="toggle-icon">−</span>
-        </button>
       </header>
 
-      <!-- Conținutul panoului (se ascunde când e minimizat) -->
       <div class="panel-content" id="panel-content">
         <nav class="panel-tabs" aria-label="Navigare principală">
-          <button class="tab-button active" type="button" data-tab="home">Acasă</button>
+          <button class="tab-button active" type="button" data-tab="home">Descoperă</button>
           <button class="tab-button" type="button" data-tab="settings">Setări</button>
         </nav>
 
@@ -106,6 +105,140 @@
       </div>
     </aside>
 
+    <nav class="bottom-navigation" aria-label="Navigare principală">
+      <div class="bottom-navigation-actions">
+        <button class="bottom-navigation-button" id="features-button" type="button" aria-controls="floating-panel" aria-expanded="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="6" r="1.5" /><circle cx="12" cy="6" r="1.5" /><circle cx="19" cy="6" r="1.5" /><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /><circle cx="5" cy="18" r="1.5" /><circle cx="12" cy="18" r="1.5" /><circle cx="19" cy="18" r="1.5" /></svg>
+          <span>Funcții</span>
+        </button>
+        <button class="bottom-navigation-button" id="friends-button" type="button" aria-controls="friends-panel" aria-expanded="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.8M17 14a5 5 0 0 1 3.5 4.8" /></svg>
+          <span>Friends</span>
+        </button>
+      </div>
+      <button class="bottom-navigation-button active" id="home-button" type="button" aria-current="page">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" /></svg>
+        <span>Acasă</span>
+      </button>
+      <div class="bottom-navigation-actions bottom-navigation-actions-right">
+        <button class="bottom-navigation-button" id="search-button" type="button" aria-controls="search-panel" aria-expanded="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3" /><path d="m16 16 4.5 4.5" /></svg>
+          <span>Caută</span>
+        </button>
+        <button class="bottom-navigation-button" id="profile-button" type="button" aria-controls="profile-panel" aria-expanded="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>
+          <span>Profil</span>
+        </button>
+      </div>
+    </nav>
+
+    <button class="recenter-button" id="recenter-button" type="button" aria-label="Recentrează harta pe locația mea" hidden>
+      <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2" /><path d="M12 2v3M22 12h-3M12 22v-3M2 12h3" /></svg>
+      <span>Recentrează-mă</span>
+    </button>
+
+    <aside class="profile-panel search-panel" id="search-panel" aria-labelledby="search-heading" hidden>
+      <div class="profile-panel-header">
+        <div>
+          <p class="eyebrow">Localuri și evenimente</p>
+          <h2 id="search-heading">Caută pe hartă</h2>
+        </div>
+        <button class="profile-close-button" id="search-close-button" type="button" aria-label="Închide căutarea">×</button>
+      </div>
+      <label class="search-label" for="event-search-input">Nume, local sau categorie</label>
+      <input class="search-input" id="event-search-input" type="search" placeholder="ex. muzică live" autocomplete="off" />
+      <div class="search-filters" id="search-filters" role="group" aria-label="Filtrează după tipul evenimentului">
+        <button class="search-filter active" type="button" data-category="all" aria-pressed="true">Toate</button>
+        <button class="search-filter" type="button" data-category="restaurants" aria-pressed="false">Restaurante</button>
+        <button class="search-filter" type="button" data-category="music" aria-pressed="false">Muzică</button>
+        <button class="search-filter" type="button" data-category="meetups" aria-pressed="false">Întâlniri</button>
+        <button class="search-filter" type="button" data-category="outdoor" aria-pressed="false">Outdoor</button>
+        <button class="search-filter" type="button" data-category="film" aria-pressed="false">Film</button>
+        <button class="search-filter" type="button" data-category="other" aria-pressed="false">Alte tipuri</button>
+      </div>
+      <p class="search-results-status" id="search-results-status" role="status">Scrie pentru a căuta evenimente.</p>
+      <ul class="search-results" id="search-results" aria-label="Rezultate căutării"></ul>
+    </aside>
+
+    <aside class="profile-panel account-profile-page" id="profile-panel" aria-labelledby="profile-heading" hidden>
+      <header class="profile-page-header">
+        <div>
+          <p class="eyebrow">Comunitatea FOMO</p>
+          <h1 id="profile-heading">Profilul meu</h1>
+        </div>
+        <button class="profile-close-button" id="profile-close-button" type="button" aria-label="Înapoi la hartă">×</button>
+      </header>
+
+      <section class="profile-hero" aria-label="Profilul tău">
+        <div class="profile-avatar" aria-hidden="true">
+          <svg viewBox="0 0 64 64"><circle cx="32" cy="23" r="11" /><path d="M12 57c1.5-12 9-19 20-19s18.5 7 20 19" /></svg>
+        </div>
+        <h2 class="profile-username" id="profile-username">Explorator</h2>
+        <form class="profile-name-editor" id="profile-name-editor" hidden>
+          <label class="visually-hidden" for="profile-name-input">Numele tău</label>
+          <input id="profile-name-input" maxlength="32" autocomplete="nickname" placeholder="Numele tău" />
+          <button type="submit">Salvează</button>
+          <button type="button" id="profile-name-cancel">Anulează</button>
+        </form>
+        <button class="profile-edit-name" id="profile-edit-name" type="button">Editează numele</button>
+        <p class="profile-account-note">Profil local · date păstrate în acest browser</p>
+      </section>
+
+      <section class="profile-section" aria-labelledby="profile-badges-heading">
+        <div class="profile-section-heading">
+          <div>
+            <p class="eyebrow">Progresul tău</p>
+            <h2 id="profile-badges-heading">Insigne</h2>
+          </div>
+        </div>
+        <div class="profile-badges" id="profile-badges" aria-live="polite"></div>
+      </section>
+
+      <section class="profile-section" aria-labelledby="profile-places-heading">
+        <div class="profile-section-heading">
+          <div>
+            <p class="eyebrow">Descoperirile tale</p>
+            <h2 id="profile-places-heading">Cele mai vizitate locații</h2>
+          </div>
+        </div>
+        <p class="profile-places-note">Bazat pe locațiile deschise de tine pe hartă, pe acest dispozitiv.</p>
+        <ol class="profile-places-list" id="profile-places-list"></ol>
+      </section>
+    </aside>
+
+    <aside class="profile-panel friends-panel" id="friends-panel" aria-labelledby="friends-heading" hidden>
+      <header class="profile-page-header">
+        <div>
+          <p class="eyebrow">Comunitatea ta</p>
+          <h1 id="friends-heading">Prieteni</h1>
+        </div>
+        <button class="profile-close-button" id="friends-close-button" type="button" aria-label="Înapoi la hartă">×</button>
+      </header>
+      <p class="profile-places-note">Lista este salvată doar în acest browser. Aplicația nu are încă un director de utilizatori și nu trimite cereri de prietenie.</p>
+      <button class="friends-find-button" id="friends-find-button" type="button" aria-controls="friends-search-form" aria-expanded="false">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3" /><path d="m16 16 4.5 4.5" /><path d="M10.8 7.8v6M7.8 10.8h6" /></svg>
+        Caută prieteni
+      </button>
+      <form class="friends-search-form" id="friends-search-form" hidden>
+        <label class="search-label" for="friends-search-input">Caută sau adaugă un nume</label>
+        <div class="friends-search-row">
+          <input class="search-input" id="friends-search-input" type="search" maxlength="40" autocomplete="off" placeholder="Numele prietenului" />
+          <button class="friends-add-button" type="submit">Adaugă</button>
+        </div>
+      </form>
+      <p class="friends-status" id="friends-status" role="status" aria-live="polite"></p>
+      <section class="friends-list-section" aria-labelledby="friends-list-heading">
+        <div class="profile-section-heading">
+          <div>
+            <p class="eyebrow">Oamenii tăi</p>
+            <h2 id="friends-list-heading">Lista de prieteni</h2>
+          </div>
+          <span class="friends-count" id="friends-count">0</span>
+        </div>
+        <ul class="friends-list" id="friends-list"></ul>
+      </section>
+    </aside>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
@@ -120,6 +253,7 @@
     <script src="./event-workflow.js"></script>
     <script src="./account-panel.js"></script>
     <script src="./route-planner.js"></script>
+    <script src="./buttons-ui/buttons-ui.js?v=friends-list-v1"></script>
     <script src="./ai-assistant.js"></script>
   </body>
 </html>
