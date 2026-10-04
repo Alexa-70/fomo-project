@@ -3,9 +3,9 @@
   gap: 8px;
   margin: 18px 0 12px;
   padding: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(14, 18, 24, 0.9);
+  background: rgba(244, 234, 215, 0.82);
 }
 
 .tab-button {
@@ -14,7 +14,7 @@
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: #929baa;
+  color: var(--muted);
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
@@ -23,9 +23,9 @@
 }
 
 .tab-button.active {
-  background: rgba(217, 255, 87, 0.18);
-  color: #d9ff57;
-  box-shadow: inset 0 0 0 1px rgba(217, 255, 87, 0.18);
+  background: rgba(244, 144, 34, 0.16);
+  color: var(--accent-deep);
+  box-shadow: inset 0 0 0 1px rgba(244, 144, 34, 0.2);
 }
 
 .tab-panel {
@@ -39,9 +39,9 @@
 .settings-panel {
   margin-top: 12px;
   padding: 14px 14px 2px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--line);
   border-radius: 13px;
-  background: #171c27;
+  background: var(--card);
 }
 
 .settings-header h2 {
@@ -58,17 +58,17 @@
 
 .settings-block .field-label {
   flex: 1;
-  color: #dfe3ea;
+  color: var(--ink-soft);
   font-size: 11px;
 }
 
 .settings-input {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(8, 11, 17, 0.8);
-  color: #f7f8fa;
+  background: var(--paper);
+  color: var(--ink);
   outline: 0;
 }
 
@@ -79,8 +79,8 @@
   gap: 12px;
   margin-top: 18px;
   padding: 12px 0 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
-  color: #eef2f7;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
 }
 
 .toggle-row span {
@@ -93,12 +93,12 @@
 }
 
 .toggle-row small {
-  color: #929baa;
+  color: var(--muted);
   font-size: 11px;
 }
 
 .toggle-row input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #d9ff57;
+  accent-color: var(--accent);
 }
