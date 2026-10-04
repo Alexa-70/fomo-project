@@ -228,8 +228,8 @@ function createEventCard(event) {
   const category = createElement("span", "event-category", event.category);
   const tier = createElement(
     "span",
-    `event-tier${event.tier === "paid" ? " promoted" : ""}`,
-    event.tier === "paid" ? "Promovat" : "Comunitate",
+    `event-tier${event.tier === "paid" ? " promoted" : ""}${event.status === "pending" ? " pending" : ""}`,
+    event.status === "pending" ? "În așteptare" : event.tier === "paid" ? "Promovat" : "Comunitate",
   );
   heading.append(category, tier);
 

@@ -1,0 +1,21 @@
+* [33mb8e4d48[m[33m ([m[1;31morigin/feature/google-maps-routes[m[33m)[m feat: trasare rute live cu DirectionsService si gestionare erori
+* [33m13bd0da[m feat: adaugat SDK Google Maps in index.html
+*   [33m5186452[m[33m ([m[1;31morigin/feature/ui-refresh[m[33m)[m Merge latest main and preserve event discovery
+[32m|[m[33m\[m  
+* [33m\[m   [33m390f369[m Merge latest main into feature/ui-refresh
+[34m|[m[35m\[m [33m\[m  
+* [35m|[m [33m|[m [33m3e2a8f0[m Add event filters and Bucharest community listings
+[35m|[m [35m|[m [33m|[m *   [33mb30b0a8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mstefbranch[m[33m, [m[1;31morigin/stefbranch[m[33m)[m Merge branch 'main' of https://github.com/Alexa-70/fomo-project into stefbranch
+[35m|[m [35m|[m [33m|[m [36m|[m[1;31m\[m  
+[35m|[m [35m|[m [33m|[m [36m|[m * [33m71973f7[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Var noua de implementat routing sa te duca la locatie si crearea de evenimente cu likeuri de join
+[35m|[m [35m|[m [33m|[m [36m|[m[33m/[m[1;33m|[m 
+[35m|[m [35m|[m [33m|[m[33m/[m[36m|[m [1;33m|[m 
+[35m|[m [35m|[m [33m|[m [36m|[m * [33m660f90f[m conturibazededate
+[35m|[m [35m|[m [33m|[m [36m|[m[33m/[m  
+[35m|[m [35m|[m [33m|[m[33m/[m[36m|[m   
+[35m|[m [35m|[m * [36m|[m [33me8fc5e4[m Merge pull request #8 from Alexa-70/FeatureRusu
+[35m|[m [35m|[m[35m/[m[1;35m|[m [36m|[m 
+[35m|[m [35m|[m * [36m|[m   [33m8d80782[m Merge branch 'main' into FeatureRusu
+[35m|[m [35m|[m [1;36m|[m[35m\[m [36m\[m  
+[35m|[m [35m|[m [1;36m|[m[35m/[m [36m/[m  
+[35m|[m [35m|[m[35m/[m[1;36m|[m [36m|[m   

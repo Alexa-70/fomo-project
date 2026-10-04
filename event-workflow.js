@@ -251,8 +251,8 @@
     return { id: snapshot.key, ...snapshot.val() };
   }
 
-  function publishApprovedEvents(events) {
-    state.events = events.filter((event) => event.status === "approved");
+  function publishCommunityEvents(events) {
+    state.events = events.filter((event) => ["approved", "pending"].includes(event.status));
     if (typeof window.FomoRefreshCommunityEvents === "function") {
       window.FomoRefreshCommunityEvents(state.events.map((event) => ({
         id: `community-${event.id}`,
@@ -268,6 +268,7 @@
         votes: 0,
         votedByMe: false,
         source: "community",
+        status: event.status,
       })));
     }
   }
@@ -277,16 +278,36 @@
       setStatus("Configurează Firebase pentru a activa propunerile și moderarea online.", "error");
       return;
     }
-    const [approvedSnapshot, locations] = await Promise.all([
-      api.db.ref("communityEvents").orderByChild("status").equalTo("approved").once("value"),
-      api.locations(),
-    ]);
-    const approved = [];
-    approvedSnapshot.forEach((child) => approved.push(eventFromSnapshot(child)));
-    publishApprovedEvents(approved);
+
+    let locations = [];
+    try {
+      locations = await api.locations();
+    } catch (error) {
+      console.error("Could not load location catalog.", error);
+      setStatus("Nu am putut încărca locațiile. Verifică Firebase și regulile de citire.", "error");
+      return;
+    }
+
     state.locations = locations;
     if (typeof window.FomoSetLocations === "function") {
       window.FomoSetLocations(state.locations);
+    }
+
+    try {
+      const [approvedSnapshot, pendingSnapshot] = await Promise.all([
+        api.db.ref("communityEvents").orderByChild("status").equalTo("approved").once("value"),
+        api.db.ref("communityEvents").orderByChild("status").equalTo("pending").once("value"),
+      ]);
+      const communityEvents = [];
+      approvedSnapshot.forEach((child) => communityEvents.push(eventFromSnapshot(child)));
+      pendingSnapshot.forEach((child) => {
+        const event = eventFromSnapshot(child);
+        if (event.status === "pending") communityEvents.push(event);
+      });
+      publishCommunityEvents(communityEvents);
+    } catch (error) {
+      console.warn("Could not load community event feed, keeping map locations functional.", error);
+      publishCommunityEvents([]);
     }
     const currentLocation = ui.location.value;
     ui.location.replaceChildren();
