@@ -22,9 +22,9 @@ const map = L.map("map", {
 })
   .setView([DEFAULT_ORIGIN.latitude, DEFAULT_ORIGIN.longitude], 13);
 
-L.maplibreGL({
-  style: "https://tiles.openfreemap.org/styles/bright",
-  attribution: '&copy; OpenStreetMap contributors &copy; OpenFreeMap',
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 }).addTo(map);
 
 // 🔥 FIX CRUCIAL: forțează Leaflet să calculeze dimensiunea corect
@@ -207,6 +207,8 @@ function createLocationTooltip(location) {
     createElement("span", "", `${location.city} · ${location.category}`),
   );
   return tooltip;
+}
+
 function getLocationCategoryIcon(category) {
   const normalizedCategory = String(category || "").trim().toLocaleLowerCase("ro");
   if (normalizedCategory.includes("restaurant")) {
