@@ -21,10 +21,34 @@ const map = L.map("map", {
 })
   .setView([DEFAULT_ORIGIN.latitude, DEFAULT_ORIGIN.longitude], 13);
 
-L.maplibreGL({
+const baseMapLayer = L.maplibreGL({
   style: "https://tiles.openfreemap.org/styles/bright",
   attribution: '&copy; OpenStreetMap contributors &copy; OpenFreeMap',
 }).addTo(map);
+const vectorMap = baseMapLayer.getMaplibreMap();
+
+function applyFomoMapTheme() {
+  if (!vectorMap.isStyleLoaded()) return;
+
+  const layerColors = {
+    background: ["background-color", "#fffdfa"],
+    park: ["fill-color", "#f5d5b8"],
+    "landcover-grass-park": ["fill-color", "#f9e7d7"],
+    "landcover-grass": ["fill-color", "#e9eadf"],
+    "landcover-wood": ["fill-color", "#dfe7d8"],
+    water: ["fill-color", "#c8dce8"],
+  };
+
+  for (const [layerId, [property, color]] of Object.entries(layerColors)) {
+    if (vectorMap.getLayer(layerId)) {
+      vectorMap.setPaintProperty(layerId, property, color);
+    }
+  }
+}
+
+vectorMap.on("style.load", () => requestAnimationFrame(applyFomoMapTheme));
+vectorMap.on("load", applyFomoMapTheme);
+if (vectorMap.isStyleLoaded()) applyFomoMapTheme();
 
 // 🔥 FIX CRUCIAL: forțează Leaflet să calculeze dimensiunea corect
 setTimeout(() => map.invalidateSize(), 100);
@@ -208,7 +232,7 @@ function setMapLocations(locations) {
   for (const location of validLocations) {
     const marker = L.circleMarker(
       [Number(location.latitude), Number(location.longitude)],
-      { radius: 7, className: "location-map-marker", fillColor: "#5cc9dc", fillOpacity: 0.92, color: "#10202b", weight: 2.5 },
+      { radius: 7, className: "location-map-marker", fillColor: "#f49022", fillOpacity: 0.95, color: "#fffdf6", weight: 2.5 },
     );
     marker.bindPopup(() => createLocationPopup(location));
     marker.bindTooltip(location.name, { direction: "top", offset: [0, -7], sticky: true });

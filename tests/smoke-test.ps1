@@ -79,16 +79,23 @@ try {
 
   $appScript = Get-Content -LiteralPath (Join-Path $projectRoot "app.js") -Raw -Encoding UTF8
   $routeScript = Get-Content -LiteralPath (Join-Path $projectRoot "route-planner.js") -Raw -Encoding UTF8
+  $indexHtml = Get-Content -LiteralPath (Join-Path $projectRoot "index.html") -Raw -Encoding UTF8
+  $styleSheet = Get-Content -LiteralPath (Join-Path $projectRoot "styles.css") -Raw -Encoding UTF8
   if ($appScript -match "http://localhost:5101" -or $appScript -notmatch "fetch\(path, options\)") {
     throw "Cererea API trebuie să folosească aceeași origine ca interfața."
+  }
+  if (-not $appScript.Contains("function applyFomoMapTheme()") -or
+    -not $appScript.Contains('park: ["fill-color", "#f5d5b8"]') -or
+    -not $appScript.Contains('vectorMap.on("style.load", () => requestAnimationFrame(applyFomoMapTheme))') -or
+    -not $styleSheet.Contains("--accent: #f49022") -or
+    -not $styleSheet.Contains("--paper: #ffffff")) {
+    throw "The clean orange theme must style the map parks and match the application palette."
   }
   if ($appScript -notmatch "navigator\.geolocation\.getCurrentPosition" -or
     $appScript -notmatch "Transport public" -or
     $appScript -notmatch "FomoRoutePlanner\.showRoute") {
     throw "Google Maps route actions and location selection must be available."
   }
-  $indexHtml = Get-Content -LiteralPath (Join-Path $projectRoot "index.html") -Raw -Encoding UTF8
-  $styleSheet = Get-Content -LiteralPath (Join-Path $projectRoot "styles.css") -Raw -Encoding UTF8
   $invalidRouteFeatures = [System.Collections.Generic.List[string]]::new()
   foreach ($feature in @(
     @{ text = 'apiRequest("/api/routes"'; source = $routeScript },

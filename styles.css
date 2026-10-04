@@ -1,14 +1,14 @@
 :root {
   color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #fbf5e6;
+  background: #fffdfa;
   color: #201d33;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --background: #fbf5e6;
-  --paper: #fffdf6;
-  --panel: #fffaf0;
-  --card: #f4ead7;
+  --background: #fffdfa;
+  --paper: #ffffff;
+  --panel: #ffffff;
+  --card: #f7f3ed;
   --ink: #201d33;
   --ink-soft: #4a4661;
   --muted: #6e6b7d;
@@ -39,7 +39,7 @@ button, input { font: inherit; }
   inset: 0;
   width: 100vw;
   height: 100vh;
-  background: #dceef4;
+  background: #fffdfa;
   z-index: 0;
 }
 
@@ -657,16 +657,16 @@ h1 {
 }
 
 .location-map-marker {
-  fill: #5cc9dc;
-  fill-opacity: 0.92;
-  stroke: #10202b;
+  fill: #f49022;
+  fill-opacity: 0.95;
+  stroke: #fffdf6;
   stroke-width: 2.5;
   vector-effect: non-scaling-stroke;
 }
 
 .location-map-marker:hover {
-  fill: #a0f0f5;
-  stroke: #f7f8fa;
+  fill: #f7a43e;
+  stroke: #fffdf6;
   stroke-width: 3;
 }
 
@@ -677,8 +677,8 @@ h1 {
   place-items: center;
   border: 3px solid var(--paper);
   border-radius: 50%;
-  background: var(--sky);
-  box-shadow: 0 0 0 6px rgba(46, 166, 224, 0.25), 0 2px 10px rgba(32, 29, 51, 0.25);
+  background: var(--sky-deep);
+  box-shadow: 0 0 0 6px rgba(28, 127, 180, 0.22), 0 2px 10px rgba(32, 29, 51, 0.25);
 }
 
 .user-map-marker span {
@@ -719,15 +719,15 @@ h1 {
 .marker-cluster-small div,
 .marker-cluster-medium div,
 .marker-cluster-large div {
-  background-color: rgba(92, 201, 220, 0.86);
-  color: #10202b;
+  background-color: rgba(244, 144, 34, 0.9);
+  color: #201d33;
   font-weight: 750;
 }
 
 .marker-cluster-small,
 .marker-cluster-medium,
 .marker-cluster-large {
-  background-color: rgba(92, 201, 220, 0.3);
+  background-color: rgba(244, 144, 34, 0.28);
 }
 
 .leaflet-popup-content-wrapper, .leaflet-popup-tip {

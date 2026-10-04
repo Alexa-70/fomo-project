@@ -112,7 +112,7 @@
 
       clearRoute();
       routeLayer = L.geoJSON(route.geometry, {
-        style: { color: "#b5dc38", weight: 6, opacity: 0.92, lineCap: "round", lineJoin: "round" },
+        style: { color: "#d9741a", weight: 6, opacity: 0.94, lineCap: "round", lineJoin: "round" },
       }).addTo(context.map);
       startMarker = L.marker([start.latitude, start.longitude], {
         icon: createMarkerIcon("A"),
