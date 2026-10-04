@@ -76,6 +76,24 @@ try {
     throw "Regulile cererilor de owner nu permit schema validă sau permit câmpuri nevalidate."
   }
 
+  $serverSource = Get-Content -LiteralPath $serverScript -Raw -Encoding UTF8
+  $catalogStart = $serverSource.IndexOf("function Get-PublicAssistantCatalog", [System.StringComparison]::Ordinal)
+  $catalogEnd = $serverSource.IndexOf("function Get-VoteStore", [System.StringComparison]::Ordinal)
+  if ($catalogStart -lt 0 -or $catalogEnd -le $catalogStart) {
+    throw "Serverul nu definește citirea catalogului public pentru asistent."
+  }
+  $catalogFunction = $serverSource.Substring($catalogStart, $catalogEnd - $catalogStart)
+  foreach ($requiredSource in @("locations.json", "communityEvents.json", "approvedEvents", "locationId", "category")) {
+    if (-not $catalogFunction.Contains($requiredSource)) {
+      throw "Contextul public al asistentului nu include '$requiredSource'."
+    }
+  }
+  foreach ($privateField in @("email", "submittedBy", "reviewedBy", "ownerRequests")) {
+    if ($catalogFunction -match "\b$privateField\b") {
+      throw "Contextul asistentului nu trebuie să selecteze câmpul privat '$privateField'."
+    }
+  }
+
   $locations = ConvertFrom-Json -InputObject (Get-Content -LiteralPath (Join-Path $projectRoot "locations.json") -Raw -Encoding UTF8)
   if ($locations.Count -ne 90) {
     throw "Catalogul trebuie să conțină 90 de locații."
