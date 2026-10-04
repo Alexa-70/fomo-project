@@ -1,0 +1,18 @@
+name: FOMO smoke tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  api-smoke-test:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run API smoke test
+        shell: powershell
+        run: .\tests\smoke-test.ps1

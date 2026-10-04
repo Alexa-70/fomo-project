@@ -1,0 +1,13 @@
+# Local runtime data
+votes.json
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

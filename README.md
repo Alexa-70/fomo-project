@@ -21,6 +21,16 @@ Dacă Windows blochează rularea scripturilor, pornește serverul explicit:
 powershell -ExecutionPolicy Bypass -File .\server.ps1
 ```
 
+## Lucrul în echipă
+
+Instrucțiunile pentru împărțirea muncii, ramuri Git și verificarea modificărilor sunt în [CONTRIBUTING.md](./CONTRIBUTING.md). Pentru a rula verificarea API-ului local, cu PowerShell deschis în folderul proiectului, execută:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\smoke-test.ps1
+```
+
+Aceeași verificare rulează automat la fiecare Pull Request și la push pe ramura `main`, folosind GitHub Actions. Nu este nevoie de servicii externe pentru test.
+
 ## API
 
 ### `GET /health`
