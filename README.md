@@ -1,9 +1,9 @@
 # Locally — evenimente și trasee pe hartă
 
-Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar aplicația calculează drumul către evenimentul ales. Interfața folosește Leaflet și OpenStreetMap; backendul PowerShell oferă lista de evenimente și voturi, caută locații cu Nominatim și calculează rute auto cu OSRM.
+Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar ruta auto către evenimente și locații este afișată în aplicație. Transportul public se deschide în Google Maps. Interfața folosește Leaflet și OpenStreetMap; backendul PowerShell oferă lista de evenimente și voturi și caută locații cu Nominatim.
 
 Navigarea este în bara de jos: **Acasă** afișează harta, iar **Funcții** deschide descoperirea evenimentelor, setările și instrumentele comunității. Codul barei de navigare este în `buttons-ui/`.
-Aplicație pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar aplicația calculează drumul către evenimentul ales. Interfața folosește Leaflet, MapLibre GL JS și stilul vectorial Bright de la OpenFreeMap (date OpenStreetMap). Backendul PowerShell caută locații cu Nominatim și calculează rute auto cu OSRM; Firebase Authentication și Realtime Database gestionează conturile, locațiile, cererile de owner și aprobarea evenimentelor.
+Aplicație pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar ruta auto către evenimente și locații este afișată în aplicație. Transportul public se deschide în Google Maps. Interfața folosește Leaflet, MapLibre GL JS și stilul vectorial Bright de la OpenFreeMap (date OpenStreetMap). Backendul PowerShell caută locații cu Nominatim; Firebase Authentication și Realtime Database gestionează conturile, locațiile, cererile de owner și aprobarea evenimentelor.
 
 ## Pornire în Windows
 
@@ -51,24 +51,21 @@ Primește `{"voterId":"..."}` și adaugă sau retrage votul. Voturile sunt salva
 
 Caută până la cinci locații prin Nominatim și întoarce numele și coordonatele lor. Backendul cache-uiește căutările și limitează cererile către Nominatim la cel mult una pe secundă, conform politicii serviciului public.
 
-### `POST /api/routes`
+### Trasee auto și transport public
 
-Primește coordonatele selectate:
+Butonul „Cum ajung?” calculează ruta prin OSRM și afișează pe harta FOMO doar linia și marcajele de plecare/destinație, fără panou cu detalii despre mașină sau durată. Ruta poate fi anulată fără a șterge originea selectată. Butonul „Transport public” deschide Google Maps cu indicațiile de autobuz/tren. Poți apăsa „Folosește locația mea” sau căuta o adresă pentru a seta plecarea; cheia Google Maps API nu este necesară.
 
-```json
-{
-  "origin": { "latitude": 46.7712, "longitude": 23.6236 },
-  "destination": { "latitude": 46.7698, "longitude": 23.5766 }
-}
-```
+### Ridesharing: Uber și integrarea viitoare Bolt
 
-Răspunsul conține distanța, durata estimată, indicațiile și geometria GeoJSON `LineString` (coordonatele sunt perechi `[longitudine, latitudine]`). Interfața poate folosi locația browserului sau o adresă introdusă și afișează traseul până la evenimentul ales.
+„Cheamă o cursă” apare pe cardurile evenimentelor și în popup-urile locațiilor. Uber se deschide prin universal deep link cu destinația și punctul de plecare selectat, atunci când sunt disponibile; utilizatorul verifică ruta, tariful și confirmă cursa în Uber. FOMO nu rezervă cursa, nu procesează plăți și nu estimează prețuri.
 
-Interacțiunea pentru alegerea originii, solicitarea traseului și desenarea acestuia pe hartă este izolată în `route-planner.js`. Utilizatorul poate apăsa „Folosește locația mea” pentru a permite accesul la locația browserului sau poate căuta o adresă; apoi butonul „Cum ajung?” calculează și afișează traseul către eveniment.
+Opțiunea Bolt este afișată ca integrare de parteneriat, dar rămâne dezactivată până când există documentație oficială verificată și acces aprobat la deeplink/API. Nu presupunem că există contract sau disponibilitate a serviciului.
+
+Pentru o integrare de parteneriat la scară, extinde `ride-sharing.js` cu un adaptor pentru fiecare furnizor, iar backendul să solicite oferte și să creeze rezervări doar prin API-uri oficiale server-to-server. Cheile și tokenurile de partener trebuie păstrate numai pe server; fiecare cerere ar trebui să solicite consimțământ explicit pentru transmiterea locației, să evite stocarea coordonatelor și să trateze cotațiile ca expirabile. Confirmarea rezervării, anulările, erorile furnizorului și reconcilierea plăților trebuie implementate înainte de a prezenta o comandă ca fiind finalizată.
 
 ### `POST /api/assistant`
 
-Trimite întrebarea și istoricul recent către asistentul Groq. Serverul adaugă evenimentele disponibile și preferințele selectate, iar răspunsul este `{ "reply": "..." }`. Pentru întrebări de traseu, interfața calculează ruta cu endpointul `/api/routes` și transmite către Groq doar rezumatul și indicațiile rutei; coordonatele exacte de plecare rămân în browser și la furnizorul de rutare.
+Trimite întrebarea și istoricul recent către asistentul Groq. Serverul adaugă evenimentele disponibile și preferințele selectate, iar răspunsul este `{ "reply": "..." }`. Pentru întrebări de traseu, interfața trimite către Groq doar numele evenimentului și locația asociată, dacă sunt disponibile; butonul „Cum ajung?” afișează ruta auto în FOMO, iar transportul public se deschide în Google Maps.
 
 Comportamentul asistentului este ghidat prin instrucțiunile din `server.ps1`, nu prin reantrenarea modelului. Acesta poate recomanda evenimentele din context, explica funcțiile prototipului și interpreta traseul recent; nu poate actualiza voturi sau setări în locul utilizatorului și nu vede propunerile salvate doar în browser.
 
@@ -116,4 +113,4 @@ Cele 90 de locații sunt afișate ca puncte cyan grupate pe hartă; la încărca
 
 ## Configurare
 
-Serviciile publice Nominatim și OSRM sunt pentru utilizare modestă și dezvoltare, nu oferă SLA și au limite de utilizare. Folosește servicii găzduite/autorizate pentru trafic de producție. Opțional, backendul acceptă variabilele de mediu `NOMINATIM_BASE_URL`, `NOMINATIM_USER_AGENT` și `OSRM_BASE_URL`. Configurează un User-Agent care identifică aplicația și un contact pentru distribuție publică.
+Serviciul public Nominatim este pentru utilizare modestă și dezvoltare, nu oferă SLA și are limite de utilizare. Folosește un serviciu găzduit/autorizat pentru trafic de producție. Opțional, backendul acceptă variabilele de mediu `NOMINATIM_BASE_URL` și `NOMINATIM_USER_AGENT`. Configurează un User-Agent care identifică aplicația și un contact pentru distribuție publică.

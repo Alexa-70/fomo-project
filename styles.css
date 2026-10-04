@@ -93,6 +93,33 @@ button, input { font: inherit; }
 
 .map-hint:empty { display: none; }
 
+.map-route-cancel {
+  position: fixed;
+  z-index: 500;
+  right: 18px;
+  bottom: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid rgba(190, 67, 47, 0.28);
+  border-radius: 999px;
+  color: #a6382c;
+  background: rgba(255, 253, 246, 0.96);
+  box-shadow: 0 8px 24px rgba(32, 29, 51, 0.16);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.map-route-cancel[hidden] { display: none; }
+.map-route-cancel:hover { color: #81291f; background: #fff1eb; }
+.map-route-cancel span { font-size: 18px; line-height: 1; }
+
 /* ============ BULA PLUTITOARE ============ */
 .floating-panel {
   position: fixed;
@@ -407,7 +434,12 @@ h1 {
   font-size: 10px;
 }
 
-.event-actions { margin-top: 10px; }
+.event-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
 
 .vote-button, .event-route-button {
   display: inline-flex;
@@ -441,6 +473,70 @@ h1 {
   border-color: rgba(244, 144, 34, 0.4);
   background: rgba(244, 144, 34, 0.12);
   color: var(--accent);
+}
+
+.transit-route-button {
+  border-color: rgba(46, 166, 224, 0.38);
+  background: rgba(46, 166, 224, 0.1);
+  color: var(--sky-deep);
+}
+
+.ride-sharing {
+  position: relative;
+}
+
+.ride-sharing-toggle {
+  border-color: rgba(91, 132, 74, 0.4);
+  background: rgba(91, 132, 74, 0.1);
+  color: #456b37;
+}
+
+.ride-sharing-menu {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 6px);
+  display: grid;
+  width: min(260px, calc(100vw - 64px));
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 8px 24px rgba(32, 29, 51, 0.18);
+}
+
+.ride-sharing-menu[hidden] { display: none; }
+
+.ride-sharing-provider {
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ride-sharing-provider:hover:not(:disabled) {
+  border-color: rgba(91, 132, 74, 0.4);
+  background: rgba(91, 132, 74, 0.1);
+}
+
+.ride-sharing-provider:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.ride-sharing-note {
+  margin: 0;
+  padding: 2px 3px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
 }
 
 .loading-events {
@@ -651,9 +747,14 @@ h1 {
   .map-badge { top: 12px; left: 12px; font-size: 10px; padding: 8px 11px; }
   .map-hint {
     right: 12px;
-    bottom: 82px;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 154px);
     font-size: 10px;
     max-width: calc(100vw - 24px);
+  }
+
+  .map-route-cancel {
+    right: 12px;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 108px);
   }
 
   .intro h1 { font-size: 19px; }

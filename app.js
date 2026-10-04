@@ -1,4 +1,3 @@
-const API_BASE_URL = "http://localhost:5101";
 const DEFAULT_ORIGIN = { latitude: 46.7712, longitude: 23.6236 };
 const PROFILE_VISITS_KEY = "fomo-place-visits-v1";
 
@@ -54,9 +53,6 @@ recenterButton.addEventListener("click", () => {
 let origin = { ...DEFAULT_ORIGIN };
 let events = [];
 let selectedEventId = null;
-let routeLayer = null;
-let originMarker = null;
-let routeDestinationMarker = null;
 let userLocation = null;
 let userLocationMarker = null;
 let userLocationZoom = null;
@@ -97,22 +93,8 @@ function setStatus(message, state = "") {
   else delete statusMessage.dataset.state;
 }
 
-function formatDistance(meters) {
-  return meters >= 1000
-    ? `${new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 1 }).format(meters / 1000)} km`
-    : `${Math.round(meters)} m`;
-}
-
-function formatDuration(seconds) {
-  const minutes = Math.round(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  if (hours === 0) return `${minutes} min`;
-  return remainingMinutes ? `${hours} h ${remainingMinutes} min` : `${hours} h`;
-}
-
 async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, options);
+  const response = await fetch(path, options);
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Cererea către server nu a reușit.");
   return data;
@@ -179,6 +161,36 @@ function createLocationPopup(location) {
   if (!upcomingEvents.length) {
     popup.append(createElement("span", "map-popup-description", "Nu există evenimente verificate la această locație."));
   }
+  const routeButton = createElement("button", "event-route-button", "Cum ajung? ↗");
+  routeButton.type = "button";
+  routeButton.addEventListener("click", (clickEvent) => {
+    clickEvent.stopPropagation();
+    window.FomoRoutePlanner.showRoute({
+      title: location.name,
+      venue: location.city,
+      latitude: Number(location.latitude),
+      longitude: Number(location.longitude),
+    });
+  });
+  const transitButton = createElement("button", "event-route-button transit-route-button", "Transport public ↗");
+  transitButton.type = "button";
+  transitButton.addEventListener("click", (clickEvent) => {
+    clickEvent.stopPropagation();
+    window.FomoRoutePlanner.showRoute({
+      title: location.name,
+      venue: location.city,
+      latitude: Number(location.latitude),
+      longitude: Number(location.longitude),
+    }, "TRANSIT");
+  });
+  const rideActions = window.FomoRideSharing.createActions({
+    title: location.name,
+    venue: location.city,
+    latitude: Number(location.latitude),
+    longitude: Number(location.longitude),
+  });
+  rideActions.addEventListener("click", (clickEvent) => clickEvent.stopPropagation());
+  popup.append(routeButton, transitButton, rideActions);
   return popup;
 }
 
@@ -273,13 +285,22 @@ function createEventCard(event) {
 
   const routeButton = createElement("button", "event-route-button", "Cum ajung? ↗");
   routeButton.type = "button";
-  routeButton.addEventListener("click", async (clickEvent) => {
+  routeButton.addEventListener("click", (clickEvent) => {
     clickEvent.stopPropagation();
     selectEvent(event.id, false);
-    await window.FomoRoutePlanner.showRoute(event);
+    window.FomoRoutePlanner.showRoute(event);
   });
+  const transitButton = createElement("button", "event-route-button transit-route-button", "Transport public ↗");
+  transitButton.type = "button";
+  transitButton.addEventListener("click", (clickEvent) => {
+    clickEvent.stopPropagation();
+    selectEvent(event.id, false);
+    window.FomoRoutePlanner.showRoute(event, "TRANSIT");
+  });
+  const rideActions = window.FomoRideSharing.createActions(event);
+  rideActions.addEventListener("click", (clickEvent) => clickEvent.stopPropagation());
   if (event.source !== "community") actions.append(voteButton);
-  actions.append(routeButton);
+  actions.append(routeButton, transitButton, rideActions);
   card.append(heading, title, description, details, actions);
   card.addEventListener("click", () => selectEvent(event.id, true));
   return card;
@@ -511,24 +532,24 @@ function locateUser(isAutomatic = false) {
 
 locateButton.addEventListener("click", () => locateUser());
 
-function clearRoute() {
-  if (routeLayer) map.removeLayer(routeLayer);
-  if (routeDestinationMarker) map.removeLayer(routeDestinationMarker);
-  routeLayer = null;
-  routeDestinationMarker = null;
-}
-
 window.FomoRouteContext = {
   apiRequest,
-  clearRoute,
-  formatDistance,
-  formatDuration,
+  formatDistance: (meters) => meters >= 1000
+    ? `${new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 1 }).format(meters / 1000)} km`
+    : `${Math.round(meters)} m`,
+  formatDuration: (seconds) => {
+    const minutes = Math.round(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    if (hours === 0) return `${minutes} min`;
+    return remainingMinutes ? `${hours} h ${remainingMinutes} min` : `${hours} h`;
+  },
+  getEventMarker: (eventId) => eventMarkers.get(eventId),
   map,
   mapHint,
-  originHint,
   originInput,
-  getOrigin: () => origin,
-  getEventMarker: (eventId) => eventMarkers.get(eventId),
+  originHint,
+  getOrigin: () => ({ ...origin }),
   setOrigin: (nextOrigin) => {
     origin = nextOrigin;
   },
@@ -548,7 +569,7 @@ async function initialize() {
   try {
     await apiRequest("/health");
     await loadEvents();
-    setStatus("Backend conectat. Votează un plan sau calculează drumul către un eveniment.", "success");
+    setStatus("Backend conectat. Calculează ruta auto pe hartă sau deschide transportul public în Google Maps.", "success");
   } catch (error) {
     eventList.replaceChildren(createElement("p", "loading-events", "Nu am putut încărca evenimentele."));
     setStatus(`${error.message} Pornește backendul cu .\\start.ps1.`, "error");

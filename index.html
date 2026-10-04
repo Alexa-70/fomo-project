@@ -28,7 +28,9 @@
     <!-- Overlay-uri peste hartă -->
     <div class="map-badge"><span class="map-live-dot"></span>Vibe Map Live</div>
     <div class="map-hint" id="map-hint"></div>
-
+    <button class="map-route-cancel" id="cancel-route-button" type="button" aria-label="Anulează traseul" title="Anulează traseul" hidden>
+      Anulează traseul <span aria-hidden="true">×</span>
+    </button>
     <!-- Panoul cu funcțiile suplimentare -->
     <aside class="floating-panel" id="floating-panel">
       <header class="panel-header">
@@ -101,7 +103,7 @@
         </div>
 
         <p class="status-message" id="status-message" role="status">Conectare la serverul FOMO...</p>
-        <p class="provider-note">Hărți © OpenStreetMap · Rute cu OSRM</p>
+        <p class="provider-note">Rută auto în aplicație · transport public prin Google Maps</p>
       </div>
     </aside>
 
@@ -292,13 +294,14 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
-    <script src="./app.js?v=location-map-fix-v1"></script>
+    <script src="./app.js?v=local-driving-route-v1"></script>
     <script src="./settings-panel.js"></script>
     <script src="./firebase-config.js"></script>
     <script src="./firebase-client.js?v=profile-repair-v2"></script>
     <script src="./event-workflow.js"></script>
     <script src="./account-panel.js?v=profile-repair-v1"></script>
-    <script src="./route-planner.js"></script>
+    <script src="./route-planner.js?v=route-line-only-v1"></script>
+    <script src="./ride-sharing.js?v=ridesharing-v1"></script>
     <script src="./buttons-ui/buttons-ui.js?v=profile-auth-status-v3"></script>
     <script src="./ai-assistant.js"></script>
   </body>

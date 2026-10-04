@@ -12,11 +12,23 @@
   font: inherit;
   font-weight: 750;
   cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .ai-assistant-launcher:hover {
   background: #d4f66b;
   transform: translateY(-1px);
+}
+
+.ai-assistant-launcher:active {
+  cursor: grabbing;
+}
+
+.ai-assistant-launcher:focus-visible {
+  outline: 3px solid #202533;
+  outline-offset: 3px;
 }
 
 .ai-assistant-panel {
