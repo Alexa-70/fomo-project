@@ -9,6 +9,8 @@
     <link rel="preconnect" href="https://tile.openstreetmap.org" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="./styles.css?v=floating-v1" />
+    <link rel="stylesheet" href="./settings-panel.css" />
+    <link rel="stylesheet" href="./event-workflow.css" />
   </head>
   <body>
     <!-- HARTA FULLSCREEN -->
@@ -33,37 +35,66 @@
 
       <!-- Conținutul panoului (se ascunde când e minimizat) -->
       <div class="panel-content" id="panel-content">
-        <div class="intro">
-          <p class="eyebrow">Don't miss out tonight</p>
-          <h1>Cine unde iese diseară?</h1>
-          <p class="intro-copy">Vezi unde se adună comunitatea ta în timp real.</p>
+        <nav class="panel-tabs" aria-label="Navigare principală">
+          <button class="tab-button active" type="button" data-tab="home">Acasă</button>
+          <button class="tab-button" type="button" data-tab="settings">Setări</button>
+        </nav>
+
+        <div class="tab-panel active" data-tab-panel="home">
+          <div class="intro">
+            <p class="eyebrow">Don't miss out tonight</p>
+            <h1>Cine unde iese diseară?</h1>
+            <p class="intro-copy">Vezi unde se adună comunitatea ta în timp real.</p>
+          </div>
+
+          <section class="origin-panel" aria-label="Locația ta">
+            <div class="origin-heading">
+              <span class="field-marker start-marker" aria-hidden="true"></span>
+              <span class="field-label">Punctul tău de plecare</span>
+              <button class="locate-button" id="locate-button" type="button">Folosește locația mea</button>
+            </div>
+            <div class="origin-field">
+              <input id="origin" name="origin" type="text" placeholder="Oraș sau adresă" autocomplete="off" aria-label="Punctul de plecare" />
+              <ul class="suggestions" id="origin-suggestions" role="listbox" aria-label="Sugestii pentru plecare" hidden></ul>
+            </div>
+            <p class="origin-hint" id="origin-hint">Punct de plecare implicit: București</p>
+          </section>
+
+          <section class="events-section" aria-labelledby="events-heading">
+            <div class="events-heading">
+              <div>
+                <p class="eyebrow">Alege vibe-ul</p>
+                <h2 id="events-heading">Localuri active în zonă</h2>
+              </div>
+              <span class="event-count" id="event-count">—</span>
+            </div>
+            <div class="event-list" id="event-list" aria-live="polite">
+              <p class="loading-events">Se încarcă pulsul orașului...</p>
+            </div>
+          </section>
         </div>
 
-        <section class="origin-panel" aria-label="Locația ta">
-          <div class="origin-heading">
-            <span class="field-marker start-marker" aria-hidden="true"></span>
-            <span class="field-label">Punctul tău de plecare</span>
-            <button class="locate-button" id="locate-button" type="button">Folosește locația mea</button>
-          </div>
-          <div class="origin-field">
-            <input id="origin" name="origin" type="text" placeholder="Oraș sau adresă" autocomplete="off" aria-label="Punctul de plecare" />
-            <ul class="suggestions" id="origin-suggestions" role="listbox" aria-label="Sugestii pentru plecare" hidden></ul>
-          </div>
-          <p class="origin-hint" id="origin-hint">Punct de plecare implicit: București</p>
-        </section>
-
-        <section class="events-section" aria-labelledby="events-heading">
-          <div class="events-heading">
-            <div>
-              <p class="eyebrow">Alege vibe-ul</p>
-              <h2 id="events-heading">Localuri active în zonă</h2>
+        <div class="tab-panel" data-tab-panel="settings">
+          <section class="settings-panel" aria-label="Setări aplicației">
+            <div class="settings-header">
+              <p class="eyebrow">Preferințe</p>
+              <h2>Setări</h2>
             </div>
-            <span class="event-count" id="event-count">—</span>
-          </div>
-          <div class="event-list" id="event-list" aria-live="polite">
-            <p class="loading-events">Se încarcă pulsul orașului...</p>
-          </div>
-        </section>
+
+            <div class="settings-block">
+              <label class="field-label" for="settings-default-origin">Oraș implicit pentru plecare</label>
+              <input id="settings-default-origin" class="settings-input" type="text" placeholder="ex. Cluj-Napoca" />
+            </div>
+
+            <label class="toggle-row" for="settings-show-promoted">
+              <span>
+                <strong>Arată evenimente promovate</strong>
+                <small>Include și evenimentele marcate ca „Promovat”</small>
+              </span>
+              <input id="settings-show-promoted" type="checkbox" checked />
+            </label>
+          </section>
+        </div>
 
         <p class="status-message" id="status-message" role="status">Conectare la serverul FOMO...</p>
         <p class="provider-note">Hărți © OpenStreetMap · Rute cu OSRM</p>
@@ -72,5 +103,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="./app.js?v=floating-v1"></script>
+    <script src="./settings-panel.js"></script>
+    <script src="./event-workflow.js"></script>
   </body>
 </html>
