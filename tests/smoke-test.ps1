@@ -60,7 +60,7 @@ try {
     throw "Endpointul /health a întors un status neașteptat."
   }
 
-  foreach ($asset in @("app.js", "route-planner.js", "ride-sharing.js", "styles.css", "firebase-config.js", "firebase-client.js", "account-panel.js", "account-panel.css", "buttons-ui/buttons-ui.js", "buttons-ui/buttons-ui.css", "event-workflow.js", "locations.json", "database.rules.json")) {
+  foreach ($asset in @("app.js", "route-planner.js", "ride-sharing.js", "styles.css", "firebase-config.js", "firebase-client.js", "account-panel.js", "account-panel.css", "buttons-ui/buttons-ui.js", "buttons-ui/buttons-ui.css", "event-workflow.js", "promotion-payment.html", "promotion-payment.css", "promotion-payment.js", "locations.json", "database.rules.json")) {
 
     $assetResponse = Invoke-WebRequest -Uri "$baseUrl/$asset" -UseBasicParsing -TimeoutSec 5
     if ($assetResponse.StatusCode -ne 200) {
@@ -84,31 +84,128 @@ try {
   $routeScript = Get-Content -LiteralPath (Join-Path $projectRoot "route-planner.js") -Raw -Encoding UTF8
   $indexHtml = Get-Content -LiteralPath (Join-Path $projectRoot "index.html") -Raw -Encoding UTF8
   $styleSheet = Get-Content -LiteralPath (Join-Path $projectRoot "styles.css") -Raw -Encoding UTF8
-  if (-not $appScript.Contains("popup-action") -or
-    -not $appScript.Contains("fomo-view-event") -or
-    -not $appScript.Contains("createEventTravelActions") -or
-    -not $buttonsScript.Contains("fomo-view-event") -or
-    -not $buttonsScript.Contains("scrollIntoView") -or
-    -not $appScript.Contains("TRANSIT") -or
-    -not $rideSharingScript.Contains("toggle.textContent")) {
-    throw "Event popups must open the event card and retain route, transit, and ride-booking actions."
+  $buttonsStyle = Get-Content -LiteralPath (Join-Path $projectRoot "buttons-ui\buttons-ui.css") -Raw -Encoding UTF8
+  if ([regex]::Matches($indexHtml, '<script src="\./app\.js').Count -ne 1 -or
+    [regex]::Matches($indexHtml, '<script src="\./buttons-ui/buttons-ui\.js').Count -ne 1 -or
+    [regex]::Matches($indexHtml, '<link rel="stylesheet" href="\./styles\.css\?v=event-popup-layout-v1"').Count -ne 1 -or
+    [regex]::Matches($indexHtml, '<script src="\./app\.js\?v=event-popup-layout-v1"').Count -ne 1 -or
+    [regex]::Matches($indexHtml, '<script src="\./event-workflow\.js\?v=public-events-promotion-demo-v1"').Count -ne 1 -or
+    $indexHtml -notmatch '<section class="profile-section" aria-labelledby="profile-badges-heading" hidden>' -or
+    -not $buttonsScript.Contains('profileBadgesSection.hidden = !user;') -or
+    -not $buttonsStyle.Contains('.profile-section[hidden]') -or
+    -not $buttonsStyle.Contains('display: none;')) {
+    throw "Aplicația trebuie încărcată o singură dată, iar insignele trebuie afișate numai utilizatorilor autentificați."
+  }
+  $githubPagesInitStart = $appScript.IndexOf("async function initialize()", [StringComparison]::Ordinal)
+  $githubPagesInitEnd = $appScript.IndexOf("initialize();", $githubPagesInitStart, [StringComparison]::Ordinal)
+  $githubPagesInit = if ($githubPagesInitStart -ge 0 -and $githubPagesInitEnd -gt $githubPagesInitStart) {
+    $appScript.Substring($githubPagesInitStart, $githubPagesInitEnd - $githubPagesInitStart)
+  } else {
+    ""
+  }
+  $githubPagesGuardPosition = $githubPagesInit.IndexOf("if (isGitHubPages())", [StringComparison]::Ordinal)
+  $githubPagesHealthRequestPosition = $githubPagesInit.IndexOf('await apiRequest("/health")', [StringComparison]::Ordinal)
+  if (-not $githubPagesInit.Contains("if (isGitHubPages())") -or
+    -not $githubPagesInit.Contains("Backendul local nu este necesar pe GitHub Pages.") -or
+    $githubPagesGuardPosition -lt 0 -or
+    $githubPagesHealthRequestPosition -le $githubPagesGuardPosition) {
+    throw "GitHub Pages must initialize community events without requiring the local backend."
+  }
+  $popupRendererStart = $appScript.IndexOf("function appendEventPopupContent(container, event, includeVenue = true)", [StringComparison]::Ordinal)
+  $popupRendererEnd = $appScript.IndexOf("function createEventPopupContent(event)", $popupRendererStart, [StringComparison]::Ordinal)
+  $popupRenderer = if ($popupRendererStart -ge 0 -and $popupRendererEnd -gt $popupRendererStart) {
+    $appScript.Substring($popupRendererStart, $popupRendererEnd - $popupRendererStart)
+  } else {
+    ""
+  }
+  $eventPopupChecks = [ordered]@{
+    popupAction = $appScript.Contains("event-route-button")
+    eventNavigation = $buttonsScript.Contains("fomo-view-event")
+    travelActions = $appScript.Contains("createEventTravelActions")
+    eventDateFormatter = $appScript.Contains("function formatCommunityEventDate(event)")
+    eventHoursFormatter = $appScript.Contains("function formatEventHours(event)")
+    combinedEventDate = $popupRenderer.Contains("formatEventTimeRange(event)")
+    hoursLabel = $appScript.Contains("formatEventTimeRange(event)") -and $appScript.Contains("formatEventHours(event)")
+    ticketPriceLabel = $popupRenderer.Contains('`Bilet: ${formatTicketPrice(event)}`')
+    attendanceSummary = $popupRenderer.Contains("attendanceSummary") -and $appScript.Contains('${attendeeCount} persoane merg')
+    attendanceCounter = $appScript.Contains('event-attendance-count${inlineCount ? " inline-count" : ""}')
+    inlineAttendanceButton = $popupRenderer.Contains("createAttendanceButton(event, true)")
+    attendanceMarkerScale = $appScript.Contains('Math.min(1.75, 1 + Math.log2(attendeeCount + 1) / 12)')
+    grayEmptyMarker = $appScript.Contains('attendeeCount === 0 ? " no-attendees"')
+    ticketLink = $appScript.Contains(('createElement("a", "event-ticket-link", "Cump' + [char]0x0103 + 'r' + [char]0x0103 + ' bilet'))
+    eventExpiry = $appScript.Contains("endsAt.getTime() <= now")
+    sharedPopupRenderer = $appScript.Contains("function appendEventPopupContent(container, event, includeVenue = true)")
+    eventPopup = $appScript.Contains("appendEventPopupContent(popup, event)")
+    locationPopup = $appScript.Contains("appendEventPopupContent(eventSection, event, false)")
+    oneTravelActionSetPerEvent = [regex]::Matches($popupRenderer, "createEventTravelActions\(event").Count -eq 1
+    noExtraPopupViewButton = -not $popupRenderer.Contains("Vezi evenimentul")
+    locationTravelActionsOnlyWhenEmpty = $appScript.Contains('if (!upcomingEvents.length) {') -and
+      $appScript.Contains("popup.append(...createEventTravelActions(routeDestination));")
+    locationAssociation = $appScript.Contains("eventBelongsToLocation(event, location) && !eventHasEnded(event)")
+    mapMarkerSync = $appScript.Contains("function syncEventMarkers()") -and $appScript.Contains("syncEventMarkers();")
+    liveEventPopupRefresh = $appScript.Contains("marker.setPopupContent(createEventPopupContent(event))")
+    locationNameNormalization = $appScript.Contains("normalizedVenue.includes(normalizedLocationName)")
+    locationCoordinateAssociation = $appScript.Contains("Math.hypot(latitudeDistance, longitudeDistance) <= 100")
+    liveLocationPopupRefresh = $appScript.Contains("marker.setPopupContent(createLocationPopup(location))")
+    eventPopupContentFactory = $appScript.Contains("function createEventPopupContent(event)")
+    locationPopupStyle = $styleSheet.Contains(".map-popup .map-popup-community-event") -and
+      $styleSheet.Contains(".map-popup .event-attendance-button")
+    eventCardNavigation = $buttonsScript.Contains("fomo-view-event") -and $buttonsScript.Contains("scrollIntoView")
+    transitAction = $appScript.Contains("TRANSIT")
+    rideshareAction = $rideSharingScript.Contains("toggle.textContent")
+  }
+  $failedEventPopupChecks = @($eventPopupChecks.GetEnumerator() |
+    Where-Object { -not $_.Value } |
+    ForEach-Object { $_.Key })
+  if ($failedEventPopupChecks.Count -gt 0) {
+    throw "Event popup validation failed: $($failedEventPopupChecks -join ', ')."
   }
   $eventWorkflowScript = Get-Content -LiteralPath (Join-Path $projectRoot "event-workflow.js") -Raw -Encoding UTF8
+  $promotionPaymentScript = Get-Content -LiteralPath (Join-Path $projectRoot "promotion-payment.js") -Raw -Encoding UTF8
+  $promotionPaymentHtml = Get-Content -LiteralPath (Join-Path $projectRoot "promotion-payment.html") -Raw -Encoding UTF8
+  $eventPublicationPosition = $eventWorkflowScript.IndexOf("state.events = mergedPublicEvents", [StringComparison]::Ordinal)
+  $locationLoadPosition = $eventWorkflowScript.IndexOf("locations = await api.locations()", [StringComparison]::Ordinal)
+  $unverifiedGuardPosition = $eventWorkflowScript.IndexOf("if (!state.user.emailVerified)", [StringComparison]::Ordinal)
+  $ownEventsQueryPosition = $eventWorkflowScript.IndexOf('.orderByChild("submittedBy")', [StringComparison]::Ordinal)
+  $eventSubmitPosition = $eventWorkflowScript.IndexOf('await eventRef.set(eventData)', [StringComparison]::Ordinal)
+  $eventPublishAfterSubmitPosition = $eventWorkflowScript.IndexOf("publishPublicEvents(state.events)", $eventSubmitPosition, [StringComparison]::Ordinal)
+  if (-not $eventWorkflowScript.Contains("Could not load pending public events.") -or
+    -not $eventWorkflowScript.Contains("Could not load event locations.") -or
+    -not $eventWorkflowScript.Contains("function startPublicEventSubscriptions(initialEvents)") -or
+    -not $eventWorkflowScript.Contains('ref.on("value"') -or
+    -not $eventWorkflowScript.Contains('equalTo(status)') -or
+    $eventPublicationPosition -lt 0 -or
+    $locationLoadPosition -le $eventPublicationPosition -or
+    $unverifiedGuardPosition -lt 0 -or
+    $ownEventsQueryPosition -le $unverifiedGuardPosition -or
+    $eventSubmitPosition -lt 0 -or
+    $eventPublishAfterSubmitPosition -le $eventSubmitPosition) {
+    throw "Approved and pending events must update the map live, newly submitted events must publish immediately, and unverified users must not run protected own-event queries."
+  }
   if (-not $appScript.Contains("function attendanceCountLabel(event)") -or
     -not $appScript.Contains("event.attendanceLoaded !== true") -or
     -not $appScript.Contains("Number.isSafeInteger(event.attendeesCount)") -or
-    -not $appScript.Contains("button.disabled = countUnavailable") -or
+    -not $appScript.Contains('event-attendance-count${inlineCount ? " inline-count" : ""}') -or
+    -not $appScript.Contains("function updateEventAttendanceSubscriptions()") -or
+    -not $appScript.Contains('eventAttendance/${event.id}') -or
+    -not $appScript.Contains("function updateEventAttendanceForUser(user)") -or
     -not $eventWorkflowScript.Contains("attendanceData.has(event.id)") -or
     -not $eventWorkflowScript.Contains("currentEvent.attendanceLoaded = true") -or
     -not $eventWorkflowScript.Contains("currentEvent.attendanceError = error.message")) {
     throw "RSVP counts must wait for the Firebase snapshot and never show an unverified zero."
   }
-  if (-not $appScript.Contains("function eventHasEnded(event, now = Date.now())") -or
-    -not $appScript.Contains("window.setInterval(pruneExpiredEvents, 30_000)") -or
-    -not $appScript.Contains('event.source === "community" ? attendanceCountLabel(event) : "…"') -or
-    -not $settingsScript.Contains("window.FomoSetPromotedVisibility?.(settings.showPromoted)") -or
-    $settingsScript.Contains("renderEventsWithSettings") -or
-    $settingsScript.Contains('<span>${event.votes}</span>')) {
+  $hasEventExpiry = $appScript.Contains("function eventHasEnded(event, now = Date.now())")
+  $prunesExpiredEvents = $appScript.Contains("window.setInterval(pruneExpiredEvents, 30_000)")
+  $eventMarkerUsesAttendance = $appScript.Contains("const markerCount = attendanceCountLabel(event);")
+  $promotedVisibilityIsApplied = $settingsScript.Contains("window.FomoSetPromotedVisibility?.(settings.showPromoted)")
+  $hasObsoleteSettingsRenderer = $settingsScript.Contains("renderEventsWithSettings")
+  $usesObsoleteVoteMarkup = $appScript.Contains('<span>${event.votes}</span>')
+  if (-not $hasEventExpiry -or
+    -not $prunesExpiredEvents -or
+    -not $eventMarkerUsesAttendance -or
+    -not $promotedVisibilityIsApplied -or
+    $hasObsoleteSettingsRenderer -or
+    $usesObsoleteVoteMarkup) {
     throw "Event markers must use attendee counts, respect visibility settings, and disappear after their end time."
   }
   if ($appScript -notmatch "function getApiBaseUrl\(\)" -or
@@ -195,21 +292,30 @@ try {
 
   $eventPriceValidation = $databaseRules.rules.communityEvents.'$eventId'.ticketPriceCents.'.validate'
   $eventWorkflowScript = Get-Content -LiteralPath (Join-Path $projectRoot "event-workflow.js") -Raw -Encoding UTF8
-  if (-not $eventWorkflowScript.Contains('ticketPrice.name = "ticketPrice"') -or
-    -not $eventWorkflowScript.Contains("ticketPriceCents: Math.round") -or
-    -not $eventWorkflowScript.Contains('endsAt.name = "endsAt"') -or
-    -not $eventWorkflowScript.Contains('ticketUrl.name = "ticketUrl"') -or
-    -not $eventWorkflowScript.Contains("Evenimentul apare pe hartă cu eticheta") -or
-    -not $eventWorkflowScript.Contains('eventAttendance/${event.id}') -or
-    -not $eventWorkflowScript.Contains("event.promotionStatus === 'paid'") -and
-    -not $eventWorkflowScript.Contains('event.promotionStatus === "paid"') -or
-    -not $eventWorkflowScript.Contains('promotionStatus: "requested"') -or
-    -not $eventWorkflowScript.Contains('promotionStatus: "paid"') -or
-    -not $eventPriceValidation.Contains("% 1 == 0") -or
-    -not $eventPriceValidation.Contains("10000000") -or
-    -not $databaseRules.rules.communityEvents.'$eventId'.'.write'.Contains("promotionRequestedBy") -or
-    -not $databaseRules.rules.communityEvents.'$eventId'.'.write'.Contains("promotedBy")) {
-    throw "Promovarea trebuie să folosească solicitare Owner și confirmare de către administrator, iar starea plătită nu poate fi setată de un utilizator."
+  $eventWriteRule = $databaseRules.rules.communityEvents.'$eventId'.'.write'
+  $promotionChecks = [ordered]@{
+    ticketPriceField = $eventWorkflowScript.Contains('ticketPrice.name = "ticketPrice"')
+    ticketPriceStoredInCents = $eventWorkflowScript.Contains('const ticketPriceCents = Math.round(Number(values.get("ticketPrice")) * 100);')
+    eventEndField = $eventWorkflowScript.Contains('endsAt.name = "endsAt"')
+    ticketUrlField = $eventWorkflowScript.Contains('ticketUrl.name = "ticketUrl"')
+    eventAttendance = $eventWorkflowScript.Contains('eventAttendance/${event.id}')
+    paidStateDisplayed = $eventWorkflowScript.Contains("event.promotionStatus === 'paid'") -or
+      $eventWorkflowScript.Contains('event.promotionStatus === "paid"')
+    ownerRequestAction = $eventWorkflowScript.Contains('promotionStatus: "requested"')
+    adminConfirmationAction = $eventWorkflowScript.Contains('promotionStatus: "paid"')
+    promotionDemoLink = $eventWorkflowScript.Contains('promotion-payment.html?eventId=${encodeURIComponent(event.id)}')
+    promotionDemoWritesRequest = $promotionPaymentScript.Contains('promotionStatus: "requested"')
+    promotionDemoChecksOwner = $promotionPaymentScript.Contains("eventOwnerUid === user.uid")
+    promotionDemoDisclaimsPayment = [regex]::IsMatch($promotionPaymentHtml, 'Nu se proceseaz.{1,80}nicio plat.{1,20}real')
+    ticketPriceValidation = $eventPriceValidation.Contains("% 1 == 0") -and $eventPriceValidation.Contains("10000000")
+    requestedStateRule = $eventWriteRule.Contains("promotionRequestedBy")
+    paidStateRule = $eventWriteRule.Contains("promotedBy")
+  }
+  $failedPromotionChecks = @($promotionChecks.GetEnumerator() |
+    Where-Object { -not $_.Value } |
+    ForEach-Object { $_.Key })
+  if ($failedPromotionChecks.Count -gt 0) {
+    throw "Promotion validation failed: $($failedPromotionChecks -join ', ')."
   }
   $communityEventRules = $databaseRules.rules.communityEvents
   $eventChildRules = $communityEventRules.'$eventId'
@@ -236,6 +342,7 @@ try {
     -not $communityEventRules.'.read'.Contains("query.orderByChild == 'locationId'") -or
     -not $communityEventRules.'$eventId'.'.read'.Contains("root.child('locations').child(data.child('locationId').val()).child('ownerUid')") -or
     -not $communityEventRules.'$eventId'.'.write'.Contains("root.child('locations').child(data.child('locationId').val()).child('ownerUid').val() == auth.uid") -or
+    $databaseRules.rules.eventAttendance.'$eventId'.'.read' -ne $true -or
     -not $databaseRules.rules.eventAttendance.'$eventId'.'$uid'.'.write'.Contains("auth.uid == $uid") -or
     -not $databaseRules.rules.eventAttendance.'$eventId'.'$uid'.'.validate'.Contains("newData.isNumber()")) {
     throw "Evenimentele trebuie să fie publice în verificare, iar aprobarea să fie disponibilă doar adminului sau ownerului locației."

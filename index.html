@@ -11,23 +11,11 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
 
-<!-- Noua temă vizuală pentru hartă (din gnt_branch) -->
-<link rel="stylesheet" href="./styles.css?v=event-discovery-v2" />
-
-<!-- Stiluri comune de interfață (prezente în ambele ramuri) -->
+<link rel="stylesheet" href="./styles.css?v=event-popup-layout-v1" />
 <link rel="stylesheet" href="./settings-panel.css?v=warm-palette-v1" />
-<link rel="stylesheet" href="./event-workflow.css?v=ticket-price-v1" />
-
-<!-- UI Butoane și Autentificare (versiunea actualizată din main) -->
-<link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=profile-firebase-auth-v2" />
-
-<!-- Stiluri adiționale unice din main care trebuie păstrate -->
-<link rel="stylesheet" href="./styles.css?v=event-discovery-v2" />
-<link rel="stylesheet" href="./styles.css?v=event-discovery-v2" />
-
-    <link rel="stylesheet" href="./settings-panel.css" />
-    <link rel="stylesheet" href="./event-workflow.css?v=ticket-price-v1" />
-    <link rel="stylesheet" href="./account-panel.css?v=owner-company-review-v1" />
+<link rel="stylesheet" href="./event-workflow.css?v=event-attendance-buttons-v2" />
+<link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=profile-hidden-badges-v1" />
+<link rel="stylesheet" href="./account-panel.css?v=owner-company-review-v1" />
     <link rel="stylesheet" href="./ai-assistant.css?v=clean-orange-map-v2" />
   </head>
   <body>
@@ -256,7 +244,7 @@
         <p class="profile-account-note" id="profile-account-note">Profil local · date păstrate în acest browser</p>
       </section>
 
-      <section class="profile-section" aria-labelledby="profile-badges-heading">
+      <section class="profile-section" aria-labelledby="profile-badges-heading" hidden>
         <div class="profile-section-heading">
           <div>
             <p class="eyebrow">Progresul tău</p>
@@ -329,24 +317,15 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
-    <script src="./app.js?v=attendee-count-expiring-events-v1"></script>
-    <script src="./settings-panel.js?v=attendee-count-expiring-events-v1"></script>
-    <script src="./firebase-config.js"></script>
-    <script src="./firebase-client.js?v=location-photo-catalog-v1"></script>
-    <script src="./event-workflow.js?v=attendee-count-expiring-events-v1"></script>
-    <script src="./account-panel.js?v=owner-promotions-role-v1"></script>
-    <script src="./route-planner.js?v=warm-map-theme-v1"></script>
-    <script src="./ride-sharing.js?v=ride-booking-label-v1"></script>
-    <script src="./buttons-ui/buttons-ui.js?v=event-popup-travel-actions-v1"></script>
-    <script src="./app.js?v=github-pages-routing-v1"></script>
+    <script src="./app.js?v=event-popup-layout-v1"></script>
     <script src="./settings-panel.js"></script>
     <script src="./firebase-config.js"></script>
     <script src="./firebase-client.js?v=location-photo-catalog-v1"></script>
-    <script src="./event-workflow.js"></script>
+    <script src="./event-workflow.js?v=public-events-promotion-demo-v1"></script>
     <script src="./account-panel.js?v=profile-repair-v1"></script>
     <script src="./route-planner.js?v=github-pages-routing-v1"></script>
     <script src="./ride-sharing.js?v=ridesharing-v1"></script>
-    <script src="./buttons-ui/buttons-ui.js?v=firebase-friends-v5"></script>
+    <script src="./buttons-ui/buttons-ui.js?v=hide-guest-badges-v1"></script>
     <script src="./ai-assistant.js"></script>
   </body>
 </html>

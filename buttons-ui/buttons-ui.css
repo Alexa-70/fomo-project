@@ -478,6 +478,10 @@ body[data-navigation-view]:not([data-navigation-view="home"]) .profile-panel:not
   border-top: 1px solid rgba(32, 29, 51, 0.12);
 }
 
+.profile-section[hidden] {
+  display: none;
+}
+
 .profile-section-heading .eyebrow {
   margin-bottom: 4px;
 }

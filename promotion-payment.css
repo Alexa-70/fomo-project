@@ -1,0 +1,101 @@
+.promotion-payment-page {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  background: var(--background);
+}
+
+.promotion-payment-card {
+  width: min(100%, 480px);
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: 0 16px 45px rgba(32, 29, 51, 0.14);
+}
+
+.promotion-back-link {
+  display: inline-block;
+  margin-bottom: 24px;
+  color: var(--sky-deep);
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.promotion-payment-card h1 {
+  margin-bottom: 14px;
+}
+
+.promotion-demo-notice,
+.promotion-demo-footnote,
+.promotion-owner-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.promotion-demo-notice {
+  padding: 12px;
+  border: 1px solid rgba(244, 144, 34, 0.38);
+  border-radius: 10px;
+  background: #fff8e9;
+  color: #754710;
+}
+
+.promotion-payment-details {
+  margin-top: 22px;
+}
+
+.promotion-payment-details h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.promotion-payment-details p {
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.promotion-payment-details #promotion-fee {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.promotion-simulate-button {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(46, 166, 224, 0.42);
+  border-radius: 10px;
+  background: rgba(46, 166, 224, 0.12);
+  color: var(--sky-deep);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.promotion-simulate-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.promotion-demo-footnote {
+  margin: 22px 0 0;
+}
+
+@media (max-width: 480px) {
+  .promotion-payment-page {
+    padding: 14px;
+  }
+
+  .promotion-payment-card {
+    padding: 20px;
+  }
+}

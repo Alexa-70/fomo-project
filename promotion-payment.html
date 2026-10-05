@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ro">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#fffdfa" />
+    <title>Promovare demo — FOMO</title>
+    <link rel="stylesheet" href="./styles.css?v=event-popup-layout-v1" />
+    <link rel="stylesheet" href="./promotion-payment.css?v=promotion-payment-demo-v1" />
+  </head>
+  <body class="promotion-payment-page">
+    <main class="promotion-payment-card">
+      <a class="promotion-back-link" href="./index.html">← Înapoi la FOMO</a>
+      <p class="eyebrow">Plată de test</p>
+      <h1>Promovează evenimentul</h1>
+      <p class="promotion-demo-notice">
+        Aceasta este o pagină fictivă pentru demonstrație. Nu se procesează și nu se încasează nicio plată reală.
+      </p>
+      <section class="promotion-payment-details" aria-live="polite">
+        <p id="promotion-payment-status" role="status">Se încarcă evenimentul...</p>
+        <div id="promotion-event-details" hidden>
+          <h2 id="promotion-event-title"></h2>
+          <p id="promotion-event-venue"></p>
+          <p id="promotion-event-ticket-price"></p>
+          <p id="promotion-fee"></p>
+          <p id="promotion-owner-note" class="promotion-owner-note" hidden></p>
+          <button id="promotion-simulate-button" class="promotion-simulate-button" type="button" disabled>
+            Simulează plata și trimite cererea
+          </button>
+        </div>
+      </section>
+      <p class="promotion-demo-footnote">
+        După simulare, administratorul confirmă manual promovarea în aplicație.
+      </p>
+    </main>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./firebase-client.js?v=location-photo-catalog-v1"></script>
+    <script src="./promotion-payment.js?v=promotion-payment-demo-v1"></script>
+  </body>
+</html>

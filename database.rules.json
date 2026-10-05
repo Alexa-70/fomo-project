@@ -270,9 +270,9 @@
     },
     "eventAttendance": {
       "$eventId": {
-        ".read": "root.child('communityEvents').child($eventId).child('status').val() == 'approved' || root.child('communityEvents').child($eventId).child('status').val() == 'pending'",
+        ".read": true,
         "$uid": {
-          ".write": "auth != null && auth.token.email_verified == true && auth.uid == $uid && (root.child('communityEvents').child($eventId).child('status').val() == 'approved' || root.child('communityEvents').child($eventId).child('status').val() == 'pending') && (!newData.exists() || newData.isNumber())",
+          ".write": "auth != null && auth.token.email_verified == true && auth.uid == $uid && (!newData.exists() || newData.isNumber())",
           ".validate": "newData.isNumber()"
         }
       }
