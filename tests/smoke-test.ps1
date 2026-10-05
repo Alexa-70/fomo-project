@@ -60,7 +60,7 @@ try {
     throw "Endpointul /health a întors un status neașteptat."
   }
 
-  foreach ($asset in @("app.js", "route-planner.js", "ride-sharing.js", "styles.css", "firebase-config.js", "firebase-client.js", "account-panel.js", "account-panel.css", "buttons-ui/buttons-ui.js", "buttons-ui/buttons-ui.css", "event-workflow.js", "promotion-payment.html", "promotion-payment.css", "promotion-payment.js", "locations.json", "database.rules.json")) {
+  foreach ($asset in @("app.js", "route-planner.js", "ride-sharing.js", "styles.css", "firebase-config.js", "firebase-client.js", "account-panel.js", "account-panel.css", "buttons-ui/buttons-ui.js", "buttons-ui/buttons-ui.css", "event-workflow.js", "promotion-payment.html", "promotion-payment.css", "promotion-payment.js", "ai-assistant.js", "assistant-config.js", "cloudflare/assistant-worker.js", "locations.json", "database.rules.json")) {
 
     $assetResponse = Invoke-WebRequest -Uri "$baseUrl/$asset" -UseBasicParsing -TimeoutSec 5
     if ($assetResponse.StatusCode -ne 200) {
@@ -77,12 +77,32 @@ try {
     $assistantStyle -notmatch "touch-action:\s*none") {
     throw "The assistant launcher must support pointer dragging, persisted positioning, and keyboard movement."
   }
+  $sharedAssistantConfig = Get-Content -LiteralPath (Join-Path $projectRoot "assistant-config.js") -Raw -Encoding UTF8
+  $assistantWorker = Get-Content -LiteralPath (Join-Path $projectRoot "cloudflare\assistant-worker.js") -Raw -Encoding UTF8
+  $wranglerConfig = Get-Content -LiteralPath (Join-Path $projectRoot "cloudflare\wrangler.toml") -Raw -Encoding UTF8
+  if (-not $sharedAssistantConfig.Contains("FOMO_ASSISTANT_API_URL") -or
+    -not $assistantScript.Contains("window.FOMO_ASSISTANT_API_URL") -or
+    -not $assistantScript.Contains("response.ok") -or
+    -not $assistantWorker.Contains("GROQ_API_KEY") -or
+    -not $assistantWorker.Contains("api.groq.com/openai/v1/chat/completions") -or
+    -not $assistantWorker.Contains("CF-Connecting-IP") -or
+    -not $assistantWorker.Contains("RATE_LIMIT_MAX_REQUESTS") -or
+    -not $assistantWorker.Contains("Access-Control-Allow-Origin") -or
+    -not $wranglerConfig.Contains('GROQ_MODEL = "openai/gpt-oss-120b"') -or
+    $assistantWorker -match "gsk_[A-Za-z0-9]{20,}") {
+    throw "The shared Groq Worker must keep its key server-side and expose the configured shared assistant endpoint."
+  }
   $appScript = Get-Content -LiteralPath (Join-Path $projectRoot "app.js") -Raw -Encoding UTF8
   $buttonsScript = Get-Content -LiteralPath (Join-Path $projectRoot "buttons-ui\buttons-ui.js") -Raw -Encoding UTF8
   $rideSharingScript = Get-Content -LiteralPath (Join-Path $projectRoot "ride-sharing.js") -Raw -Encoding UTF8
   $settingsScript = Get-Content -LiteralPath (Join-Path $projectRoot "settings-panel.js") -Raw -Encoding UTF8
   $routeScript = Get-Content -LiteralPath (Join-Path $projectRoot "route-planner.js") -Raw -Encoding UTF8
   $indexHtml = Get-Content -LiteralPath (Join-Path $projectRoot "index.html") -Raw -Encoding UTF8
+  if ([regex]::Matches($indexHtml, '<script src="\./assistant-config\.js\?v=shared-groq-worker-v1"').Count -ne 1 -or
+    [regex]::Matches($indexHtml, '<script src="\./ai-assistant\.js\?v=shared-groq-worker-v1"').Count -ne 1 -or
+    $indexHtml.IndexOf('assistant-config.js?v=shared-groq-worker-v1', [StringComparison]::Ordinal) -gt $indexHtml.IndexOf('ai-assistant.js?v=shared-groq-worker-v1', [StringComparison]::Ordinal)) {
+    throw "The shared assistant endpoint configuration must load before the assistant client."
+  }
   $styleSheet = Get-Content -LiteralPath (Join-Path $projectRoot "styles.css") -Raw -Encoding UTF8
   $buttonsStyle = Get-Content -LiteralPath (Join-Path $projectRoot "buttons-ui\buttons-ui.css") -Raw -Encoding UTF8
   if ([regex]::Matches($indexHtml, '<script src="\./app\.js').Count -ne 1 -or
@@ -450,7 +470,7 @@ try {
     }
   }
 
-  Write-Output "Smoke test passed: API, Firebase assets, empty demo event catalog and 90 seeded locations are valid."
+  Write-Output "Smoke test passed: API, shared Groq Worker configuration, Firebase assets, empty demo event catalog and 90 seeded locations are valid."
 }
 finally {
   if ($null -ne $serverProcess -and -not $serverProcess.HasExited) {

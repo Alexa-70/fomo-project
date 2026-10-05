@@ -69,9 +69,42 @@ Pentru o integrare de parteneriat la scară, extinde `ride-sharing.js` cu un ada
 
 Trimite întrebarea și istoricul recent către asistentul Groq. Serverul adaugă evenimentele disponibile și preferințele selectate, iar răspunsul este `{ "reply": "..." }`. Pentru întrebări de traseu, interfața trimite către Groq doar numele evenimentului și locația asociată, dacă sunt disponibile; butonul „Cum ajung?” afișează ruta auto în FOMO, iar transportul public se deschide în Google Maps.
 
-Comportamentul asistentului este ghidat prin instrucțiunile din `server.ps1`, nu prin reantrenarea modelului. Acesta poate căuta cele 90 de locații după oraș, nume și categorie, recomanda evenimente aprobate și interpreta traseul recent; datele sunt citite la fiecare întrebare. Dacă Realtime Database nu este disponibilă, endpointul întoarce o eroare în loc să răspundă folosind date incomplete. Asistentul nu poate actualiza voturi sau setări în locul utilizatorului.
+Comportamentul asistentului este ghidat prin instrucțiunile din `server.ps1` pentru backendul local și din `cloudflare/assistant-worker.js` pentru versiunea comună, nu prin reantrenarea modelului. Acesta poate căuta cele 90 de locații după oraș, nume și categorie, recomanda evenimente aprobate și interpreta traseul recent; datele sunt citite la fiecare întrebare. Dacă Realtime Database nu este disponibilă, endpointul întoarce o eroare în loc să răspundă folosind date incomplete. Asistentul nu poate actualiza voturi sau setări în locul utilizatorului.
 
-Asistentul este disponibil din butonul „Întreabă FOMO”. Pentru a-l configura, setează cheia numai în sesiunea PowerShell în care pornești serverul:
+Asistentul este disponibil din butonul „Întreabă FOMO”. Pentru utilizarea comună pe toate laptopurile, aplicația poate apela un Cloudflare Worker găzduit, iar cheia Groq rămâne numai în secretul Worker-ului. Endpointul este public și are o limită best-effort de 8 cereri pe minut per IP; starea limitei este locală instanței Worker și nu oprește abuzul distribuit. Pentru protecție mai puternică, activează Cloudflare Turnstile sau cere autentificare înainte de utilizare.
+
+Configurarea comună se face o singură dată pentru proiect:
+
+1. Revocă orice cheie Groq care a fost expusă și generează una nouă. Nu o trimite în chat și nu o adăuga într-un fișier.
+2. Instalează Node.js, apoi autentifică Wrangler în contul Cloudflare:
+
+```powershell
+npx --yes wrangler@latest login
+```
+
+3. Publică Worker-ul inițial:
+
+   ```powershell
+   npx --yes wrangler@latest deploy --config .\cloudflare\wrangler.toml
+   ```
+
+4. Adaugă cheia nouă ca secret Cloudflare. Wrangler o cere interactiv; nu o pune în comandă. Comanda publică imediat noua versiune a Worker-ului:
+
+   ```powershell
+   npx --yes wrangler@latest secret put GROQ_API_KEY --config .\cloudflare\wrangler.toml
+   ```
+
+5. Wrangler afișează adresa publică `https://fomo-groq-assistant.<subdomeniul-contului>.workers.dev`. Pune acea adresă fără `/api/assistant` în `assistant-config.js` ca valoare pentru `window.FOMO_ASSISTANT_API_URL`, apoi publică schimbarea site-ului. De atunci orice laptop care folosește versiunea publicată a site-ului apelează același Worker; nu mai setează cheia local.
+
+   Exemplu de configurare, înlocuiește adresa cu cea afișată de Wrangler:
+
+   ```js
+   window.FOMO_ASSISTANT_API_URL = "https://fomo-groq-assistant.subdomeniul-tau.workers.dev";
+   ```
+
+Cloudflare Workers Free include 100.000 de cereri pe zi și 10 ms CPU per invocare; Groq are limite și eventuale costuri separate, în funcție de cont/model. Cheia rămâne doar în Cloudflare. CORS permite domeniul GitHub Pages al proiectului și localhost pentru dezvoltare, dar CORS nu este autentificare și nu oprește apelurile directe către endpoint.
+
+Dacă `assistant-config.js` este gol, dezvoltarea locală folosește endpointul PowerShell existent. Pentru acel mod local, setează cheia numai în procesul PowerShell în care pornești serverul:
 
 ```powershell
 $env:GROQ_API_KEY = Read-Host "GROQ_API_KEY"
@@ -79,7 +112,7 @@ $env:GROQ_MODEL = "openai/gpt-oss-120b"
 .\start.ps1
 ```
 
-`GROQ_MODEL` este opțional și implicit este `openai/gpt-oss-120b`. Nu salva cheia în fișierele proiectului și nu o trimite din browser. Dacă cheia lipsește, endpointul întoarce `503`; dacă Groq nu răspunde, întoarce `502`.
+Nu salva cheia în fișierele proiectului și nu o trimite din browser. Dacă cheia lipsește, endpointul local întoarce `503`; dacă Groq nu răspunde, întoarce `502`.
 
 ## Firebase: conturi, locații și moderare
 
