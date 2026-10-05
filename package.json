@@ -1,0 +1,27 @@
+{
+  "name": "fomo-project",
+  "version": "1.0.0",
+  "description": "Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar ruta auto către evenimente și locații este afișată în aplicație. Transportul public se deschide în Google Maps. Interfața folosește Leaflet și OpenStreetMap; backendul PowerShell oferă lista de evenimente și voturi și caută locații cu Nominatim.",
+  "main": "account-panel.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alexa-70/fomo-project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Alexa-70/fomo-project/issues"
+  },
+  "homepage": "https://github.com/Alexa-70/fomo-project#readme",
+  "dependencies": {
+    "@google/genai": "^2.27.0"
+  }
+}
