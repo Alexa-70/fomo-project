@@ -1,6 +1,10 @@
 const DEFAULT_ORIGIN = { latitude: 46.7712, longitude: 23.6236 };
 const PROFILE_VISITS_KEY = "fomo-place-visits-v1";
 
+function isGitHubPages() {
+  return window.location.hostname.endsWith(".github.io");
+}
+
 function getApiBaseUrl() {
   const localHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
   const isLocalFrontend = window.location.protocol === "file:" ||
@@ -80,6 +84,7 @@ const locationLayer = L.markerClusterGroup({
 }).addTo(map);
 let hasFitLocationBounds = false;
 const locationCount = document.querySelector("#map-location-count");
+const placeSearchCache = new Map();
 let searchTimer = null;
 let searchRequestId = 0;
 
@@ -725,6 +730,34 @@ async function loadEvents() {
 }
 
 async function searchPlaces(query) {
+  if (isGitHubPages()) {
+    const cacheKey = query.trim().toLowerCase();
+    if (placeSearchCache.has(cacheKey)) return placeSearchCache.get(cacheKey);
+
+    const url = new URL("https://nominatim.openstreetmap.org/search");
+    url.search = new URLSearchParams({
+      format: "jsonv2",
+      limit: "5",
+      q: query,
+    });
+    const response = await fetch(url, { headers: { "Accept-Language": "ro" } });
+    if (!response.ok) {
+      throw new Error(`Căutarea adresei nu este disponibilă (HTTP ${response.status}).`);
+    }
+    const places = await response.json();
+    const results = places.map((place) => ({
+      displayName: place.display_name,
+      latitude: Number(place.lat),
+      longitude: Number(place.lon),
+    })).filter((place) =>
+      place.displayName &&
+      Number.isFinite(place.latitude) &&
+      Number.isFinite(place.longitude)
+    );
+    placeSearchCache.set(cacheKey, results);
+    return results;
+  }
+
   const data = await apiRequest(`/api/search?q=${encodeURIComponent(query)}`);
   return data.results;
 }
@@ -776,7 +809,7 @@ originInput.addEventListener("input", () => {
         setStatus(error.message, "error");
       }
     }
-  }, 700);
+  }, isGitHubPages() ? 1100 : 700);
 });
 
 originInput.addEventListener("keydown", (event) => {
@@ -854,12 +887,14 @@ window.FomoRouteContext = {
   clearRoute,
   formatDistance,
   formatDuration,
+  isGitHubPages,
   map,
   mapHint,
   originInput,
   originHint,
   getOrigin: () => ({ ...origin }),
   getEventMarker: (eventId) => eventMarkers.get(eventId),
+  searchPlaces,
   setOrigin: (nextOrigin) => {
     origin = nextOrigin;
   },

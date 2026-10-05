@@ -118,6 +118,12 @@ try {
     -not $appScript.Contains("backendul FOMO")) {
     throw "Cererile API trebuie să folosească backendul local din Live Server și aceeași origine din aplicația găzduită."
   }
+  if (-not $appScript.Contains('window.location.hostname.endsWith(".github.io")') -or
+    -not $appScript.Contains("nominatim.openstreetmap.org/search") -or
+    -not $routeScript.Contains("router.project-osrm.org/route/v1/driving/") -or
+    -not $routeScript.Contains("context.isGitHubPages()")) {
+    throw "GitHub Pages trebuie să poată geocoda plecarea și cere rute publice fără backend local."
+  }
   $assistantScript = Get-Content -LiteralPath (Join-Path $projectRoot "ai-assistant.js") -Raw -Encoding UTF8
   if (-not $assistantScript.Contains('window.FomoRouteContext.apiRequest("/api/assistant"')) {
     throw "Asistentul trebuie să folosească aceeași origine API ca ruta și căutarea."
@@ -136,6 +142,7 @@ try {
   $invalidRouteFeatures = [System.Collections.Generic.List[string]]::new()
   foreach ($feature in @(
     @{ text = 'apiRequest("/api/routes"'; source = $routeScript },
+    @{ text = "requestHostedRoute(coordinates.origin, coordinates.destination)"; source = $routeScript },
     @{ text = "L.geoJSON(route.geometry"; source = $routeScript },
     @{ text = "function cancelRoute()"; source = $routeScript },
     @{ text = 'travelmode: "transit"'; source = $routeScript },
