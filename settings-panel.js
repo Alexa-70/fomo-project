@@ -54,58 +54,6 @@
     });
   }
 
-  function getVisibleEvents() {
-    const source = Array.isArray(events) ? [...events] : [];
-    if (settings.showPromoted === false) {
-      return source.filter((event) => event.tier !== "paid");
-    }
-    return source;
-  }
-
-  function renderEventsWithSettings() {
-    if (typeof events === "undefined" || events.length === 0) {
-      return;
-    }
-
-    const visibleEvents = getVisibleEvents();
-    const eventList = document.querySelector("#event-list");
-    const eventCount = document.querySelector("#event-count");
-
-    visibleEvents.sort((left, right) => right.votes - left.votes || left.title.localeCompare(right.title, "ro"));
-    eventList.replaceChildren();
-    eventCount.textContent = String(visibleEvents.length);
-
-    if (visibleEvents.length === 0) {
-      const emptyMessage = settings.showPromoted === false
-        ? "Toate evenimentele promovate sunt ascunse în setări."
-        : "Nu sunt evenimente disponibile momentan.";
-      eventList.append(createElement("p", "loading-events", emptyMessage));
-      return;
-    }
-
-    for (const event of visibleEvents) {
-      eventList.append(createEventCard(event));
-    }
-
-    const markerMap = eventMarkers || new Map();
-    for (const [id, marker] of markerMap.entries()) {
-      const event = events.find((item) => item.id === id);
-      if (!event) continue;
-      const isVisible = settings.showPromoted !== false || event.tier !== "paid";
-      marker.setOpacity(isVisible ? 1 : 0.35);
-      marker.setIcon(L.divIcon({
-        className: "",
-        html: `<div class="event-map-marker${event.id === selectedEventId ? " active" : ""}"><span>${event.votes}</span></div>`,
-        iconSize: [38, 38],
-        iconAnchor: [19, 19],
-      }));
-    }
-  }
-
-  if (typeof window.renderEvents === "function") {
-    window.renderEvents = renderEventsWithSettings;
-  }
-
   tabButtons.forEach((button) => {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
   });
@@ -127,9 +75,7 @@
     settingsShowPromotedInput.addEventListener("change", (event) => {
       settings.showPromoted = event.target.checked;
       saveSettings();
-      if (typeof window.renderEvents === "function") {
-        window.renderEvents();
-      }
+      window.FomoSetPromotedVisibility?.(settings.showPromoted);
       const statusMessage = document.querySelector("#status-message");
       if (statusMessage) {
         statusMessage.textContent = "Setările au fost salvate.";
@@ -139,8 +85,6 @@
   }
 
   syncSettingsControls();
+  window.FomoSetPromotedVisibility?.(settings.showPromoted !== false);
   switchTab("home");
-  if (typeof window.renderEvents === "function") {
-    window.renderEvents();
-  }
 })();

@@ -77,11 +77,40 @@ try {
     $assistantStyle -notmatch "touch-action:\s*none") {
     throw "The assistant launcher must support pointer dragging, persisted positioning, and keyboard movement."
   }
-
   $appScript = Get-Content -LiteralPath (Join-Path $projectRoot "app.js") -Raw -Encoding UTF8
+  $buttonsScript = Get-Content -LiteralPath (Join-Path $projectRoot "buttons-ui\buttons-ui.js") -Raw -Encoding UTF8
+  $rideSharingScript = Get-Content -LiteralPath (Join-Path $projectRoot "ride-sharing.js") -Raw -Encoding UTF8
+  $settingsScript = Get-Content -LiteralPath (Join-Path $projectRoot "settings-panel.js") -Raw -Encoding UTF8
   $routeScript = Get-Content -LiteralPath (Join-Path $projectRoot "route-planner.js") -Raw -Encoding UTF8
   $indexHtml = Get-Content -LiteralPath (Join-Path $projectRoot "index.html") -Raw -Encoding UTF8
   $styleSheet = Get-Content -LiteralPath (Join-Path $projectRoot "styles.css") -Raw -Encoding UTF8
+  if (-not $appScript.Contains("popup-action") -or
+    -not $appScript.Contains("fomo-view-event") -or
+    -not $appScript.Contains("createEventTravelActions") -or
+    -not $buttonsScript.Contains("fomo-view-event") -or
+    -not $buttonsScript.Contains("scrollIntoView") -or
+    -not $appScript.Contains("TRANSIT") -or
+    -not $rideSharingScript.Contains("toggle.textContent")) {
+    throw "Event popups must open the event card and retain route, transit, and ride-booking actions."
+  }
+  $eventWorkflowScript = Get-Content -LiteralPath (Join-Path $projectRoot "event-workflow.js") -Raw -Encoding UTF8
+  if (-not $appScript.Contains("function attendanceCountLabel(event)") -or
+    -not $appScript.Contains("event.attendanceLoaded !== true") -or
+    -not $appScript.Contains("Number.isSafeInteger(event.attendeesCount)") -or
+    -not $appScript.Contains("button.disabled = countUnavailable") -or
+    -not $eventWorkflowScript.Contains("attendanceData.has(event.id)") -or
+    -not $eventWorkflowScript.Contains("currentEvent.attendanceLoaded = true") -or
+    -not $eventWorkflowScript.Contains("currentEvent.attendanceError = error.message")) {
+    throw "RSVP counts must wait for the Firebase snapshot and never show an unverified zero."
+  }
+  if (-not $appScript.Contains("function eventHasEnded(event, now = Date.now())") -or
+    -not $appScript.Contains("window.setInterval(pruneExpiredEvents, 30_000)") -or
+    -not $appScript.Contains('event.source === "community" ? attendanceCountLabel(event) : "…"') -or
+    -not $settingsScript.Contains("window.FomoSetPromotedVisibility?.(settings.showPromoted)") -or
+    $settingsScript.Contains("renderEventsWithSettings") -or
+    $settingsScript.Contains('<span>${event.votes}</span>')) {
+    throw "Event markers must use attendee counts, respect visibility settings, and disappear after their end time."
+  }
   if ($appScript -notmatch "function getApiBaseUrl\(\)" -or
     $appScript -notmatch 'window\.location\.protocol === "file:"' -or
     $appScript -notmatch 'window\.location\.port !== "5101"' -or
@@ -93,12 +122,11 @@ try {
   if (-not $assistantScript.Contains('window.FomoRouteContext.apiRequest("/api/assistant"')) {
     throw "Asistentul trebuie să folosească aceeași origine API ca ruta și căutarea."
   }
-  if (-not $appScript.Contains("function applyFomoMapTheme()") -or
-    -not $appScript.Contains('park: ["fill-color", "#f5d5b8"]') -or
-    -not $appScript.Contains('vectorMap.on("style.load", () => requestAnimationFrame(applyFomoMapTheme))') -or
+  if (-not $appScript.Contains('L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png"') -or
+    -not $appScript.Contains('attribution: ''&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors''') -or
     -not $styleSheet.Contains("--accent: #f49022") -or
     -not $styleSheet.Contains("--paper: #ffffff")) {
-    throw "The clean orange theme must style the map parks and match the application palette."
+    throw "The map must use visible OpenStreetMap raster tiles and match the application palette."
   }
   if ($appScript -notmatch "navigator\.geolocation\.getCurrentPosition" -or
     $appScript -notmatch "Transport public" -or
@@ -151,10 +179,86 @@ try {
   if (-not $ownerRequestValidation.Contains("newData.hasChildren") -or
     -not $ownerRequestValidation.Contains("newData.child('reviewedAt').isNumber()") -or
     -not $ownerRequestValidation.Contains("newData.child('reviewedBy').isString()") -or
+    -not $ownerRequestValidation.Contains("'companyName', 'companyType', 'companyCountry', 'companyCui', 'companyTradeRegister', 'companyAddress'") -or
     $ownerRequestRule.'$uid'.'$locationId'.'$other'.'.validate' -ne $false -or
     $null -eq $ownerRequestRule.'$uid'.'$locationId'.userId -or
     $null -eq $ownerRequestRule.'$uid'.'$locationId'.reviewedAt) {
     throw "Regulile cererilor de owner nu permit schema validă sau permit câmpuri nevalidate."
+  }
+
+  $eventPriceValidation = $databaseRules.rules.communityEvents.'$eventId'.ticketPriceCents.'.validate'
+  $eventWorkflowScript = Get-Content -LiteralPath (Join-Path $projectRoot "event-workflow.js") -Raw -Encoding UTF8
+  if (-not $eventWorkflowScript.Contains('ticketPrice.name = "ticketPrice"') -or
+    -not $eventWorkflowScript.Contains("ticketPriceCents: Math.round") -or
+    -not $eventWorkflowScript.Contains('endsAt.name = "endsAt"') -or
+    -not $eventWorkflowScript.Contains('ticketUrl.name = "ticketUrl"') -or
+    -not $eventWorkflowScript.Contains("Evenimentul apare pe hartă cu eticheta") -or
+    -not $eventWorkflowScript.Contains('eventAttendance/${event.id}') -or
+    -not $eventWorkflowScript.Contains("event.promotionStatus === 'paid'") -and
+    -not $eventWorkflowScript.Contains('event.promotionStatus === "paid"') -or
+    -not $eventWorkflowScript.Contains('promotionStatus: "requested"') -or
+    -not $eventWorkflowScript.Contains('promotionStatus: "paid"') -or
+    -not $eventPriceValidation.Contains("% 1 == 0") -or
+    -not $eventPriceValidation.Contains("10000000") -or
+    -not $databaseRules.rules.communityEvents.'$eventId'.'.write'.Contains("promotionRequestedBy") -or
+    -not $databaseRules.rules.communityEvents.'$eventId'.'.write'.Contains("promotedBy")) {
+    throw "Promovarea trebuie să folosească solicitare Owner și confirmare de către administrator, iar starea plătită nu poate fi setată de un utilizator."
+  }
+  $communityEventRules = $databaseRules.rules.communityEvents
+  $eventChildRules = $communityEventRules.'$eventId'
+  foreach ($eventField in @(
+      "title", "category", "description", "locationId", "venue", "city",
+      "latitude", "longitude", "startsAt", "startsAtMs", "endsAt", "venueType",
+      "status", "submittedBy", "submittedByEmail", "submittedAt",
+      "reviewedAt", "reviewedBy", "ticketUrl"
+    )) {
+    $fieldRules = $eventChildRules.$eventField
+    if ($null -eq $fieldRules -or $fieldRules.PSObject.Properties.Name -notcontains ".validate") {
+      throw "Câmpul $eventField al evenimentului trebuie să aibă un validator explicit."
+    }
+  }
+  if ($eventChildRules.'$other'.'.validate' -ne $false) {
+    throw "Câmpurile necunoscute ale evenimentelor trebuie respinse."
+  }
+  if (-not $eventWorkflowScript.Contains("Mesaje primite de user-vld") -or
+    -not $eventWorkflowScript.Contains('const eventAdminUid = "QM6bRLP4OMZRo6CBNe6JkqClMrf1"') -or
+    -not $eventWorkflowScript.Contains('api.db.ref("communityEvents").once("value")') -or
+    -not $communityEventRules.'.read'.Contains("auth.uid == 'QM6bRLP4OMZRo6CBNe6JkqClMrf1'") -or
+    -not $communityEventRules.'$eventId'.'.read'.Contains("auth.uid == 'QM6bRLP4OMZRo6CBNe6JkqClMrf1'") -or
+    -not $communityEventRules.'.read'.Contains("query.equalTo == 'pending'") -or
+    -not $communityEventRules.'.read'.Contains("query.orderByChild == 'locationId'") -or
+    -not $communityEventRules.'$eventId'.'.read'.Contains("root.child('locations').child(data.child('locationId').val()).child('ownerUid')") -or
+    -not $communityEventRules.'$eventId'.'.write'.Contains("root.child('locations').child(data.child('locationId').val()).child('ownerUid').val() == auth.uid") -or
+    -not $databaseRules.rules.eventAttendance.'$eventId'.'$uid'.'.write'.Contains("auth.uid == $uid") -or
+    -not $databaseRules.rules.eventAttendance.'$eventId'.'$uid'.'.validate'.Contains("newData.isNumber()")) {
+    throw "Evenimentele trebuie să fie publice în verificare, iar aprobarea să fie disponibilă doar adminului sau ownerului locației."
+  }
+  foreach ($categoryFilter in @("socializing", "workshops", "charity", "exhibitions", "sports", "healthcare", "entertainment")) {
+    if (-not $indexHtml.Contains("data-category=`"$categoryFilter`"") -or
+      -not $eventWorkflowScript.Contains("`"$categoryFilter`"")) {
+      throw "Căutarea și formularul trebuie să includă categoria '$categoryFilter'."
+    }
+  }
+  foreach ($filterControl in @('id="event-sort-select"', 'id="venue-type-select"')) {
+    if (-not $indexHtml.Contains($filterControl)) {
+      throw "Filtrele hărții nu includ '$filterControl'."
+    }
+  }
+
+  $accountPanelScript = Get-Content -LiteralPath (Join-Path $projectRoot "account-panel.js") -Raw -Encoding UTF8
+  $accountPanelStyle = Get-Content -LiteralPath (Join-Path $projectRoot "account-panel.css") -Raw -Encoding UTF8
+  foreach ($companyField in @("companyName", "companyType", "companyCountry", "companyCui", "companyTradeRegister", "companyAddress")) {
+    if (-not $accountPanelScript.Contains($companyField)) {
+      throw "Formularul de owner nu colectează '$companyField'."
+    }
+  }
+  if (-not $accountPanelScript.Contains("adminNoticeBadge") -or
+    -not $accountPanelScript.Contains("pendingCount ?") -or
+    -not $accountPanelScript.Contains('requests.filter((request) => request.status === "pending")') -or
+    -not $accountPanelScript.Contains('ui.adminSection.hidden = state.role !== "admin" || !state.emailVerified') -or
+    -not $databaseRules.rules.ownerRequests.'.read'.Contains("root.child('admins').child(auth.uid).val() == true") -or
+    -not $accountPanelStyle.Contains(".account-notification-badge")) {
+    throw "Administratorii trebuie să primească un badge live pentru solicitările de owner."
   }
 
   $usernameIndexRules = $databaseRules.rules.usernameIndex
@@ -174,8 +278,7 @@ try {
   }
 
   $friendsScript = Get-Content -LiteralPath (Join-Path $projectRoot "buttons-ui\buttons-ui.js") -Raw -Encoding UTF8
-  $accountPanelScript = Get-Content -LiteralPath (Join-Path $projectRoot "account-panel.js") -Raw -Encoding UTF8
-  foreach ($requiredFriendFeature in @("getUsernameIndexKey", 'usernameIndex/${getUsernameIndexKey(query)}', 'friendRequests/${friendUser.uid}', 'friends/${friendUser.uid}', 'publicProfiles/${user.uid}', 'friends/${friendUser.uid}`)', 'friendRecords = friendsSnapshot.val() || {}', "emailVerified", "getIdToken(true)", "friendsCount.textContent = String(friends.length)")) {
+  foreach ($requiredFriendFeature in @("getUsernameIndexKey", 'usernameIndex/${getUsernameIndexKey(query)}', 'friendRequests/${friendUser.uid}', 'friends/${friendUser.uid}', 'publicProfiles/${user.uid}', 'friends/${friendUser.uid}`)', 'friendRecords = friendsSnapshot.val() || {}', "friendRecordsLoaded = true", "friendRecordsLoaded = false", "if (friendUser && !friendRecordsLoaded)", "emailVerified", "getIdToken(true)", "friendsCount.textContent = String(friends.length)")) {
     if (-not $friendsScript.Contains($requiredFriendFeature)) {
       throw "Fluxul de prietenie nu include '$requiredFriendFeature'."
     }
