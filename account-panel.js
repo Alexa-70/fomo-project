@@ -39,6 +39,10 @@
     navButton.type = "button";
     navButton.dataset.tab = "account";
     navButton.setAttribute("aria-selected", "false");
+    const adminNoticeBadge = element("span", "account-notification-badge");
+    adminNoticeBadge.hidden = true;
+    adminNoticeBadge.setAttribute("aria-label", "Solicitări noi de owner");
+    navButton.append(adminNoticeBadge);
     nav.append(navButton);
 
     const panel = element("section", "tab-panel account-panel");
@@ -89,10 +93,38 @@
     const ownership = element("section", "account-section");
     ownership.append(
       element("h3", "", "Solicită rol de owner"),
-      element("p", "account-help", "Administratorul va verifica solicitarea pentru locația aleasă."),
+      element("p", "account-help", "Trimite datele firmei care operează locația. Un administrator va verifica informațiile înainte de aprobare."),
     );
     const ownerForm = element("form", "account-form");
     const locationSelect = field(ownerForm, "Locația", "locationId", "text", { select: true });
+    field(ownerForm, "Denumirea legală a firmei", "companyName", "text", {
+      maxLength: 160,
+      placeholder: "ex. Exemplu Restaurant SRL",
+    });
+    const companyType = field(ownerForm, "Forma juridică", "companyType", "text", { select: true });
+    companyType.append(
+      ...["SRL", "SRL-D", "SA", "PFA", "II", "IF", "Altă formă"].map((label) => {
+        const option = element("option", "", label);
+        option.value = label;
+        return option;
+      }),
+    );
+    const companyCountry = field(ownerForm, "Țara de înregistrare", "companyCountry", "text", { select: true });
+    const romania = element("option", "", "România");
+    romania.value = "RO";
+    companyCountry.append(romania);
+    field(ownerForm, "CUI / CIF", "companyCui", "text", {
+      maxLength: 12,
+      placeholder: "ex. RO12345678",
+    });
+    field(ownerForm, "Număr Registrul Comerțului", "companyTradeRegister", "text", {
+      maxLength: 32,
+      placeholder: "ex. J40/1234/2024",
+    });
+    field(ownerForm, "Sediul social", "companyAddress", "text", {
+      maxLength: 200,
+      placeholder: "Localitate, stradă, număr",
+    });
     const ownerSubmit = element("button", "account-submit", "Trimite solicitarea");
     ownerSubmit.type = "submit";
     ownerForm.append(ownerSubmit);
@@ -101,9 +133,10 @@
 
     const adminSection = element("section", "account-section");
     adminSection.hidden = true;
+    const adminHeading = element("h3", "account-admin-heading", "Mesaje de solicitare Owner");
     adminSection.append(
-      element("h3", "", "Solicitări de owner"),
-      element("p", "account-help", "Cererile utilizatorilor apar aici în timp real. Verifică datele înainte de aprobare."),
+      adminHeading,
+      element("p", "account-help", "Mesajele apar numai conturilor autorizate ca administrator. Verifică datele firmei înainte să confirmi sau să respingi ownerul."),
     );
     const adminRequests = element("div", "account-request-list");
     const seedButton = element("button", "account-secondary", "Încarcă cele 90 de locații");
@@ -115,9 +148,9 @@
     content.insertBefore(panel, content.querySelector("#status-message"));
 
     return {
-      navButton, panel, status, signedOut, signedIn, loginTab, signupTab,
+      navButton, adminNoticeBadge, panel, status, signedOut, signedIn, loginTab, signupTab,
       loginForm, signupForm, profile, resendButton, signOutButton, ownership,
-      ownerForm, locationSelect, ownerRequests, adminSection, adminRequests,
+      ownerForm, locationSelect, ownerRequests, adminSection, adminRequests, adminHeading,
       seedButton, roleBadge,
     };
   }
@@ -206,6 +239,14 @@
         element("strong", "", `${request.city} — ${request.locationName}`),
         element("span", "", `${request.username} · ${request.email} · ${request.status === "pending" ? "În așteptare" : request.status === "approved" ? "Aprobată" : "Respinsă"}`),
       );
+      if (isAdmin) {
+        card.append(
+          element("strong", "account-company-name", request.companyName || "Date de firmă indisponibile (solicitare veche)"),
+          element("span", "", `Formă juridică: ${request.companyType || "—"} · Țară: ${request.companyCountry || "—"}`),
+          element("span", "", `CUI/CIF: ${request.companyCui || "—"} · Registrul Comerțului: ${request.companyTradeRegister || "—"}`),
+          element("span", "", `Sediu social: ${request.companyAddress || "—"}`),
+        );
+      }
       if (isAdmin && request.status === "pending") {
         const actions = element("div", "account-request-actions");
         for (const [decision, label] of [["rejected", "Respinge"], ["approved", "Aprobă"]]) {
@@ -252,6 +293,9 @@
       stopWatchingRequests();
       state.role = "user";
       state.emailVerified = false;
+      ui.adminNoticeBadge.hidden = true;
+      ui.adminNoticeBadge.textContent = "";
+      ui.navButton.setAttribute("aria-label", "Cont");
       return;
     }
 
@@ -269,7 +313,7 @@
     const ownedLocations = state.locations.filter((location) => location.ownerUid === state.user.uid);
     state.role = isAdmin ? "admin" : ownedLocations.length ? "owner" : "user";
     const roleLabel = state.role === "admin" ? "Administrator"
-      : state.role === "owner" ? "Owner"
+      : state.role === "owner" ? "Owner verificat"
         : "Utilizator";
     ui.profile.replaceChildren(
       element("strong", "", state.user.displayName || state.user.email),
@@ -288,6 +332,9 @@
     populateLocations();
     if (!state.emailVerified) {
       stopWatchingRequests();
+      ui.adminNoticeBadge.hidden = true;
+      ui.adminNoticeBadge.textContent = "";
+      ui.navButton.setAttribute("aria-label", "Cont");
       renderRequestList(ui.ownerRequests, [], false);
       renderRequestList(ui.adminRequests, [], true);
       return;
@@ -308,7 +355,26 @@
     });
     renderRequestList(ui.ownerRequests, state.role === "admin" ? [] : requests, false);
     if (state.role === "admin") {
-      renderRequestList(ui.adminRequests, requests, true);
+      const pendingCount = requests.filter((request) => request.status === "pending").length;
+      ui.adminNoticeBadge.hidden = pendingCount === 0;
+      ui.adminNoticeBadge.textContent = pendingCount > 9 ? "9+" : String(pendingCount);
+      ui.adminNoticeBadge.title = `${pendingCount} solicitări de owner în așteptare`;
+      ui.navButton.setAttribute(
+        "aria-label",
+        pendingCount ? `Cont, ${pendingCount} solicitări de owner noi` : "Cont",
+      );
+      ui.adminHeading.textContent = pendingCount
+        ? `Mesaje Owner · ${pendingCount} noi`
+        : "Mesaje de solicitare Owner";
+      renderRequestList(
+        ui.adminRequests,
+        requests.filter((request) => request.status === "pending"),
+        true,
+      );
+    } else {
+      ui.adminNoticeBadge.hidden = true;
+      ui.adminNoticeBadge.textContent = "";
+      ui.navButton.setAttribute("aria-label", "Cont");
     }
   }
 
@@ -414,6 +480,18 @@
         const location = state.locations.find((item) => item.id === ui.locationSelect.value);
         if (!location) throw new Error("Alege o locație validă.");
         if (location.ownerUid) throw new Error("Locația are deja un owner aprobat.");
+        const values = new FormData(ui.ownerForm);
+        const companyName = String(values.get("companyName") || "").trim();
+        const companyType = String(values.get("companyType") || "").trim();
+        const companyCountry = String(values.get("companyCountry") || "").trim();
+        const companyCui = String(values.get("companyCui") || "").trim().toUpperCase().replace(/\s+/g, "");
+        const companyTradeRegister = String(values.get("companyTradeRegister") || "").trim().toUpperCase();
+        const companyAddress = String(values.get("companyAddress") || "").trim();
+        const cuiDigits = companyCui.replace(/^RO/, "");
+        if (!companyName || !companyType || companyCountry !== "RO" || !/^\d{2,10}$/.test(cuiDigits) ||
+          !companyTradeRegister || !companyAddress) {
+          throw new Error("Completează toate datele firmei. CUI/CIF trebuie să aibă între 2 și 10 cifre (prefixul RO este opțional).");
+        }
         const requestId = `${state.user.uid}/${location.id}`;
         const existingRequest = await api.db.ref(`ownerRequests/${requestId}`).once("value");
         if (existingRequest.exists() && existingRequest.child("status").val() !== "rejected") {
@@ -426,6 +504,12 @@
           locationId: location.id,
           locationName: location.name,
           city: location.city,
+          companyName,
+          companyType,
+          companyCountry,
+          companyCui: companyCui.startsWith("RO") ? companyCui : `RO${companyCui}`,
+          companyTradeRegister,
+          companyAddress,
           status: "pending",
           submittedAt: firebase.database.ServerValue.TIMESTAMP,
         });

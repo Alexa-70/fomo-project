@@ -48,7 +48,7 @@
     const toggle = document.createElement("button");
     toggle.className = "event-route-button ride-sharing-toggle";
     toggle.type = "button";
-    toggle.textContent = "Cheamă o cursă";
+    toggle.textContent = "Comandă o cursă";
     toggle.setAttribute("aria-expanded", "false");
     toggle.setAttribute("aria-label", `Alege un serviciu de ridesharing pentru ${destination.title}`);
 

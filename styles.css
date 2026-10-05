@@ -385,6 +385,66 @@ h1 {
   color: var(--accent-deep);
 }
 
+.event-tier.unverified {
+  background: rgba(244, 144, 34, 0.13);
+  color: var(--accent-deep);
+}
+
+.event-ticket-link,
+.workflow-ticket-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid rgba(244, 144, 34, 0.4);
+  border-radius: 8px;
+  background: rgba(244, 144, 34, 0.12);
+  color: var(--accent-deep);
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.event-attendance-button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid rgba(46, 166, 224, 0.4);
+  border-radius: 8px;
+  background: rgba(46, 166, 224, 0.1);
+  color: var(--sky-deep);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.event-attendance-button.attending {
+  border-color: rgba(103, 176, 76, 0.4);
+  background: rgba(103, 176, 76, 0.13);
+  color: #487d38;
+}
+
+.event-attendance-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.event-filter-controls {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.event-filter-controls label {
+  display: grid;
+  gap: 5px;
+  color: #6e6b7d;
+  font-size: 11px;
+  font-weight: 650;
+}
+
 .event-title {
   margin: 8px 0 3px;
   font-size: 13px;
