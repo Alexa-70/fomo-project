@@ -43,6 +43,8 @@
   const profileResetPassword = document.querySelector("#profile-reset-password");
   const profileSignout = document.querySelector("#profile-signout");
   const profileBadges = document.querySelector("#profile-badges");
+  const profileBadgesSection = profileBadges.closest(".profile-section");
+  profileBadgesSection.hidden = true;
   const profilePlacesList = document.querySelector("#profile-places-list");
   const mapHint = document.querySelector("#map-hint");
   const profileNameKey = "fomo-profile-name-v1";
@@ -450,6 +452,7 @@
 
   async function renderProfileAccount(user) {
     const api = window.FomoFirebase;
+    profileBadgesSection.hidden = !user;
     if (!api || !api.configured) {
       profileAuthSwitch.hidden = true;
       profileLoginForm.hidden = true;

@@ -6,6 +6,11 @@
   const state = { events: [], locations: [], user: null };
   const attendanceSubscriptions = new Map();
   const attendanceData = new Map();
+  const publicEventSnapshots = new Map([
+    ["approved", new Map()],
+    ["pending", new Map()],
+  ]);
+  let publicEventSubscriptionsStarted = false;
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -278,15 +283,18 @@
       ticketLink.rel = "noopener noreferrer";
       card.append(ticketLink);
     }
+    if (actionMode === "request-promotion" && !event.promotionStatus) {
+      const paymentLink = element("a", "workflow-ticket-link", "Deschide plata demo ↗");
+      paymentLink.href = `./promotion-payment.html?eventId=${encodeURIComponent(event.id)}`;
+      card.append(paymentLink);
+    }
     if (actionMode) {
       const actions = element("div", "workflow-card-actions");
       const choices = actionMode === "review"
         ? [["rejected", "Respinge"], ["approved", "Aprobă"]]
         : actionMode === "request-promotion"
-          ? event.promotionStatus ? [] : [["requested", `Solicită promovarea · ${(
-            Math.round(Number(event.ticketPriceCents || 0) * 5 / 100) / 100
-          ).toFixed(2)} RON`]]
-          : [["paid", "Confirmă plata și promovează"]];
+          ? []
+          : [["paid", "Confirmă promovarea (demo)"]];
       for (const [decision, label] of choices) {
         const button = element(
           "button",
@@ -318,9 +326,7 @@
             await loadData();
             const message = actionMode === "review"
               ? decision === "approved" ? "Evenimentul a fost verificat și publicat." : "Propunerea a fost respinsă."
-              : actionMode === "request-promotion"
-                ? "Solicitarea de promovare a fost trimisă administratorului pentru verificarea plății."
-                : "Plata a fost confirmată; evenimentul este acum promovat.";
+              : "Promovarea demo a fost confirmată.";
             setStatus(message, "success");
           } catch (error) {
             button.disabled = false;
@@ -329,7 +335,7 @@
         });
         actions.append(button);
       }
-      card.append(actions);
+      if (choices.length) card.append(actions);
     }
     return card;
   }
@@ -392,6 +398,38 @@
     }
   }
 
+  function startPublicEventSubscriptions(initialEvents) {
+    if (publicEventSubscriptionsStarted) return;
+    publicEventSubscriptionsStarted = true;
+
+    for (const event of initialEvents) {
+      publicEventSnapshots.get(event.status)?.set(event.id, event);
+    }
+
+    for (const status of ["approved", "pending"]) {
+      const ref = api.db.ref("communityEvents")
+        .orderByChild("status")
+        .equalTo(status);
+      ref.on("value", (snapshot) => {
+        const eventsForStatus = publicEventSnapshots.get(status);
+        eventsForStatus.clear();
+        snapshot.forEach((child) => {
+          const event = eventFromSnapshot(child);
+          eventsForStatus.set(event.id, event);
+        });
+
+        const publicEvents = [...publicEventSnapshots.values()]
+          .flatMap((eventsById) => [...eventsById.values()]);
+        state.events = publicEvents;
+        updateAttendanceSubscriptions(publicEvents);
+        publishPublicEvents(publicEvents);
+      }, (error) => {
+        console.error(`Could not subscribe to ${status} community events.`, error);
+        setStatus(`Evenimentele noi (${status}) nu se pot încărca în timp real: ${error.message}`, "error");
+      });
+    }
+  }
+
   function watchAttendance(event) {
     if (attendanceSubscriptions.has(event.id)) return;
     const ref = api.db.ref(`eventAttendance/${event.id}`);
@@ -450,24 +488,44 @@
       setStatus("Configurează Firebase pentru a activa propunerile și moderarea online.", "error");
       return;
     }
-    const [approvedSnapshot, pendingSnapshot, locations] = await Promise.all([
-      api.db.ref("communityEvents").orderByChild("status").equalTo("approved").once("value"),
-      api.db.ref("communityEvents").orderByChild("status").equalTo("pending").once("value"),
-      api.locations(),
-    ]);
-    const publicEvents = [];
-    pendingSnapshot.forEach((child) => publicEvents.push(eventFromSnapshot(child)));
+    const approvedSnapshot = await api.db.ref("communityEvents")
+      .orderByChild("status")
+      .equalTo("approved")
+      .once("value");
     const approved = [];
     approvedSnapshot.forEach((child) => approved.push(eventFromSnapshot(child)));
-    const mergedPublicEvents = [...approved, ...publicEvents];
+
+    let pendingEvents = [];
+    try {
+      const pendingSnapshot = await api.db.ref("communityEvents")
+        .orderByChild("status")
+        .equalTo("pending")
+        .once("value");
+      pendingSnapshot.forEach((child) => pendingEvents.push(eventFromSnapshot(child)));
+    } catch (error) {
+      console.error("Could not load pending public events.", error);
+      setStatus(`Evenimentele aprobate sunt afișate, dar propunerile în verificare nu s-au putut încărca: ${error.message}`, "error");
+    }
+
+    const mergedPublicEvents = [...approved, ...pendingEvents];
     state.events = mergedPublicEvents;
     updateAttendanceSubscriptions(mergedPublicEvents);
     publishPublicEvents(mergedPublicEvents);
-    state.locations = locations;
+    startPublicEventSubscriptions(mergedPublicEvents);
+
+    let locations = state.locations;
+    try {
+      locations = await api.locations();
+      state.locations = locations;
+    } catch (error) {
+      console.error("Could not load event locations.", error);
+      setStatus(`Evenimentele au fost încărcate, dar locațiile nu s-au putut citi din Firebase: ${error.message}`, "error");
+    }
+
     if (typeof window.FomoSetEventLocations === "function") {
-      window.FomoSetEventLocations(state.locations);
+      if (locations.length) window.FomoSetEventLocations(locations);
     } else if (typeof window.FomoSetLocations === "function") {
-      window.FomoSetLocations(state.locations);
+      if (locations.length) window.FomoSetLocations(locations);
     }
     const currentLocation = ui.location.value;
     ui.location.replaceChildren();
@@ -494,6 +552,16 @@
       return;
     }
 
+    if (!state.user.emailVerified) {
+      renderList(ui.ownList, [], "Confirmă emailul pentru a vedea și gestiona propunerile tale.", false);
+      renderList(ui.promotionList, [], "Confirmă emailul pentru a gestiona promovările.", false);
+      renderList(ui.adminInboxList, [], "Confirmă emailul pentru acces.", false);
+      ui.adminInbox.hidden = true;
+      ui.adminInboxCount.textContent = "";
+      ui.promotionCount.textContent = "";
+      return;
+    }
+
     const ownSnapshot = await api.db.ref("communityEvents")
       .orderByChild("submittedBy")
       .equalTo(state.user.uid)
@@ -503,15 +571,6 @@
     ownEvents
       .sort((left, right) => String(right.submittedAt || "").localeCompare(String(left.submittedAt || "")));
     renderList(ui.ownList, ownEvents, "Nu ai trimis încă nicio propunere.", false);
-
-    if (!state.user.emailVerified) {
-      renderList(ui.promotionList, [], "Confirmă emailul pentru a gestiona promovările.", false);
-      renderList(ui.adminInboxList, [], "Confirmă emailul pentru acces.", false);
-      ui.adminInbox.hidden = true;
-      ui.adminInboxCount.textContent = "";
-      ui.promotionCount.textContent = "";
-      return;
-    }
 
     try {
       const admin = state.user.uid === eventAdminUid
@@ -655,7 +714,14 @@
         ...(ticketUrlValue ? { ticketUrl: ticketUrlValue } : {}),
         submittedAt: firebase.database.ServerValue.TIMESTAMP,
       };
-      await api.db.ref("communityEvents").push(eventData);
+      const eventRef = api.db.ref("communityEvents").push();
+      await eventRef.set(eventData);
+      const createdSnapshot = await eventRef.once("value");
+      const createdEvent = eventFromSnapshot(createdSnapshot);
+      const currentEvents = state.events.filter((item) => item.id !== createdEvent.id);
+      state.events = [...currentEvents, createdEvent];
+      updateAttendanceSubscriptions(state.events);
+      publishPublicEvents(state.events);
       ui.form.reset();
       await loadData();
       setStatus("Evenimentul apare pe hartă cu eticheta „În verificare”; ownerul locației sau user-vld îl poate aproba.", "success");

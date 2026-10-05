@@ -68,6 +68,7 @@ let events = [];
 let eventFilters = { category: "all", venueType: "all", sort: "popular" };
 let showPromotedEvents = true;
 let mapLocationsById = new Map();
+let locationMarkersById = new Map();
 let selectedEventId = null;
 let routeLayer = null;
 let originMarker = null;
@@ -76,6 +77,7 @@ let userLocation = null;
 let userLocationMarker = null;
 let userLocationZoom = null;
 let eventMarkers = new Map();
+const eventAttendanceSubscriptions = new Map();
 const locationLayer = L.markerClusterGroup({
   showCoverageOnHover: false,
   spiderfyOnMaxZoom: true,
@@ -160,21 +162,55 @@ function formatEventDate(value) {
   }).format(date);
 }
 
-function formatEventTimeRange(event) {
+function formatCommunityEventDate(event) {
   const startsAt = new Date(event.startsAt);
-  const endsAt = new Date(event.endsAt || new Date(startsAt.getTime() + 2 * 60 * 60 * 1000));
-  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) return "Oră nespecificată";
+  if (Number.isNaN(startsAt.getTime())) return "Dată nespecificată";
   const today = new Date();
   const isToday = startsAt.getFullYear() === today.getFullYear() &&
     startsAt.getMonth() === today.getMonth() &&
     startsAt.getDate() === today.getDate();
-  const day = isToday
-    ? "Astăzi"
-    : new Intl.DateTimeFormat("ro-RO", { weekday: "long", day: "numeric", month: "long" }).format(startsAt);
+  return isToday
+    ? `Astăzi, ${new Intl.DateTimeFormat("ro-RO", { day: "numeric", month: "long" }).format(startsAt)}`
+    : new Intl.DateTimeFormat("ro-RO", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(startsAt);
+}
+
+function formatEventHours(event) {
+  const startsAt = new Date(event.startsAt);
+  const endsAt = new Date(event.endsAt || new Date(startsAt.getTime() + 2 * 60 * 60 * 1000));
+  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) return "Interval orar nespecificat";
   const timeOptions = { hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
   const startTime = new Intl.DateTimeFormat("ro-RO", timeOptions).format(startsAt);
   const endTime = new Intl.DateTimeFormat("ro-RO", timeOptions).format(endsAt);
-  return `${day} · ${startTime}–${endTime}`;
+  return `${startTime}–${endTime}`;
+}
+
+function formatEventTimeRange(event) {
+  const startsAt = new Date(event.startsAt);
+  if (Number.isNaN(startsAt.getTime())) return `Dată nespecificată · ${formatEventHours(event)}`;
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const isToday = startsAt.getFullYear() === today.getFullYear() &&
+    startsAt.getMonth() === today.getMonth() &&
+    startsAt.getDate() === today.getDate();
+  const isTomorrow = startsAt.getFullYear() === tomorrow.getFullYear() &&
+    startsAt.getMonth() === tomorrow.getMonth() &&
+    startsAt.getDate() === tomorrow.getDate();
+  const dateLabel = isToday
+    ? "Astăzi"
+    : isTomorrow
+      ? "Mâine"
+      : new Intl.DateTimeFormat("ro-RO", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      }).format(startsAt);
+  return `${dateLabel} · ${formatEventHours(event)}`;
 }
 
 function eventHasEnded(event, now = Date.now()) {
@@ -226,15 +262,37 @@ function attendanceCountLabel(event) {
   return String(event.attendeesCount);
 }
 
-function createAttendanceButton(event) {
+function getEventMarkerIcon(event, isActive = false) {
+  const attendeeCount = event.attendanceLoaded === true &&
+    Number.isSafeInteger(event.attendeesCount)
+    ? Math.max(0, event.attendeesCount)
+    : null;
+  const markerScale = attendeeCount > 0
+    ? Math.min(1.75, 1 + Math.log2(attendeeCount + 1) / 12)
+    : 1;
+  const markerState = attendeeCount === 0 ? " no-attendees"
+    : attendeeCount === null ? " attendance-pending"
+      : "";
+  const activeState = isActive ? " active" : "";
+  const markerCount = attendanceCountLabel(event);
+
+  return L.divIcon({
+    className: "",
+    html: `<div class="event-map-marker-wrap"><div class="event-map-marker${event.tier === "paid" ? " promoted" : ""}${markerState}${activeState}" style="--marker-scale:${markerScale}"><span>${markerCount}</span></div></div>`,
+    iconSize: [36, 42],
+    iconAnchor: [18, 39],
+  });
+}
+
+function createAttendanceButton(event, inlineCount = false) {
   const count = attendanceCountLabel(event);
   const countUnavailable = count === "…" || count === "—";
-  const button = createElement(
-    "button",
-    `event-attendance-button${event.goingByMe ? " attending" : ""}${countUnavailable ? " attendance-loading" : ""}`,
-    `${event.goingByMe ? "Merg" : "Voi merge"} · ${count}`,
-  );
+  const button = createElement("button", `event-attendance-button${event.goingByMe ? " attending" : ""}${countUnavailable ? " attendance-loading" : ""}`);
   button.type = "button";
+  button.append(
+    createElement("span", "event-attendance-label", event.goingByMe ? "Merg" : "Voi merge"),
+    createElement("span", `event-attendance-count${inlineCount ? " inline-count" : ""}`, inlineCount ? `· ${count}` : count),
+  );
   button.disabled = countUnavailable;
   button.title = count === "…"
     ? "Se încarcă numărul real de participanți."
@@ -289,47 +347,132 @@ function createEventTravelActions(event, onRoute) {
   return [routeButton, transitButton, rideActions];
 }
 
-/* ==================== MARKERE ==================== */
-function createEventMarker(event) {
-  const markerCount = event.source === "community"
-    ? attendanceCountLabel(event)
-    : String(event.votes);
-  const markerIcon = L.divIcon({
-    className: "",
-    html: `<div class="event-map-marker-wrap"><div class="event-map-marker${event.tier === "paid" ? " promoted" : ""}"><span>${markerCount}</span></div></div>`,
-    iconSize: [36, 42],
-    iconAnchor: [18, 39],
-  });
-  const marker = L.marker([event.latitude, event.longitude], { icon: markerIcon }).addTo(map);
-  const popup = document.createElement("div");
-  popup.className = "map-popup";
-  const title = createElement("strong", "", event.title);
-  const venue = createElement("span", "", event.venue);
-  popup.append(title, venue);
-  popup.append(createElement(
+function appendEventPopupContent(container, event, includeVenue = true) {
+  container.append(
+    createElement("strong", includeVenue ? "" : "map-popup-event-title", event.title),
+  );
+  if (includeVenue) container.append(createElement("span", "", event.venue));
+  container.append(createElement(
     "span",
     "map-popup-description",
-    `${formatEventTimeRange(event)} · Bilet: ${formatTicketPrice(event)}`,
+    formatEventTimeRange(event),
   ));
-  popup.append(createAttendanceButton(event));
-  const ticketLink = createTicketLink(event);
-  if (ticketLink) popup.append(ticketLink);
-  if (event.status === "pending") {
-    popup.append(createElement("span", "map-popup-description", "În verificare de către owner sau admin."));
-  }
+  container.append(createElement(
+    "span",
+    "map-popup-description",
+    `Bilet: ${formatTicketPrice(event)}`,
+  ));
+
+  const attendeeCount = event.attendanceLoaded === true &&
+    Number.isSafeInteger(event.attendeesCount)
+    ? Math.max(0, event.attendeesCount)
+    : null;
+  const attendanceSummary = attendeeCount === null
+    ? event.attendanceError ? "Participanți indisponibili" : "Se încarcă participanții…"
+    : attendeeCount === 1 ? "1 persoană merge" : `${attendeeCount} persoane merg`;
+  container.append(createElement("span", "map-popup-description", attendanceSummary));
+  container.append(createElement(
+    "span",
+    "map-popup-description",
+    event.status === "pending" ? "În verificare" : "Verificat",
+  ));
   if (event.description) {
-    popup.append(createElement("span", "map-popup-description", event.description));
+    container.append(createElement("span", "map-popup-description", event.description));
   }
-  const viewButton = createElement("button", "event-route-button popup-action", "Vezi evenimentul →");
-  viewButton.type = "button";
-  viewButton.addEventListener("click", (clickEvent) => {
-    clickEvent.stopPropagation();
-    window.dispatchEvent(new CustomEvent("fomo-view-event", { detail: { eventId: event.id } }));
+  container.append(createAttendanceButton(event, true));
+  const ticketLink = createTicketLink(event);
+  if (ticketLink) container.append(ticketLink);
+  container.append(...createEventTravelActions(event, () => selectEvent(event.id, false)));
+}
+
+function createEventPopupContent(event) {
+  const popup = createElement("div", "map-popup");
+  appendEventPopupContent(popup, event);
+  return popup;
+}
+
+/* ==================== MARKERE ==================== */
+function createEventMarker(event) {
+  const markerIcon = getEventMarkerIcon(event);
+  const marker = L.marker([event.latitude, event.longitude], { icon: markerIcon }).addTo(map);
+  marker.bindPopup(() => {
+    const currentEvent = events.find((item) => item.id === event.id) || event;
+    return createEventPopupContent(currentEvent);
   });
-  popup.append(viewButton, ...createEventTravelActions(event, () => selectEvent(event.id, false)));
-  marker.bindPopup(popup);
   marker.on("click", () => selectEvent(event.id, false));
   return marker;
+}
+
+function syncEventMarkers() {
+  const currentEventIds = new Set(events.map((event) => event.id));
+  for (const [eventId, marker] of eventMarkers) {
+    if (currentEventIds.has(eventId)) continue;
+    if (map.hasLayer(marker)) map.removeLayer(marker);
+    eventMarkers.delete(eventId);
+  }
+
+  for (const event of events) {
+    let marker = eventMarkers.get(event.id);
+    if (!marker) {
+      marker = createEventMarker(event);
+      eventMarkers.set(event.id, marker);
+      continue;
+    }
+    marker.setIcon(getEventMarkerIcon(event, event.id === selectedEventId));
+    if (marker.isPopupOpen()) marker.setPopupContent(createEventPopupContent(event));
+  }
+}
+
+function updateEventAttendanceSubscriptions() {
+  const api = window.FomoFirebase;
+  const eventsWithAttendance = events.filter((event) => event.source !== "community");
+  const activeEventIds = new Set(eventsWithAttendance.map((event) => event.id));
+
+  for (const [eventId, subscription] of eventAttendanceSubscriptions) {
+    if (activeEventIds.has(eventId)) continue;
+    subscription.ref.off("value", subscription.listener);
+    eventAttendanceSubscriptions.delete(eventId);
+  }
+  if (!api?.configured) return;
+
+  for (const event of eventsWithAttendance) {
+    if (eventAttendanceSubscriptions.has(event.id)) continue;
+    const ref = api.db.ref(`eventAttendance/${event.id}`);
+    const subscription = { ref, listener: null, attendees: null };
+    subscription.listener = (snapshot) => {
+      const attendees = snapshot.val() || {};
+      subscription.attendees = attendees;
+      const currentEvent = events.find((item) => item.id === event.id && item.source !== "community");
+      if (!currentEvent) return;
+      currentEvent.attendeesCount = Object.keys(attendees).length;
+      currentEvent.attendanceLoaded = true;
+      currentEvent.attendanceError = null;
+      const user = api.user();
+      currentEvent.goingByMe = Boolean(user && attendees[user.uid]);
+      renderEvents();
+    };
+    ref.on("value", subscription.listener, (error) => {
+      console.error(`Could not load attendance for event ${event.id}.`, error);
+      const currentEvent = events.find((item) => item.id === event.id && item.source !== "community");
+      if (!currentEvent) return;
+      currentEvent.attendanceLoaded = false;
+      currentEvent.attendanceError = error.message;
+      renderEvents();
+      setStatus(`Nu am putut încărca numărul real de participanți: ${error.message}`, "error");
+    });
+    eventAttendanceSubscriptions.set(event.id, subscription);
+  }
+}
+
+function updateEventAttendanceForUser(user) {
+  for (const event of events) {
+    if (event.source === "community") continue;
+    const subscription = eventAttendanceSubscriptions.get(event.id);
+    if (subscription?.attendees) {
+      event.goingByMe = Boolean(user && subscription.attendees[user.uid]);
+    }
+  }
+  renderEvents();
 }
 
 function createLocationPopup(location) {
@@ -340,39 +483,55 @@ function createLocationPopup(location) {
     createElement("span", "", location.category),
   );
   const upcomingEvents = events
-    .filter((event) => event.source === "community" && event.locationId === location.id && !eventHasEnded(event))
+    .filter((event) => eventBelongsToLocation(event, location) && !eventHasEnded(event))
     .sort((left, right) => new Date(left.startsAt) - new Date(right.startsAt));
   for (const event of upcomingEvents) {
-    popup.append(
-      createElement("strong", "map-popup-event-title", event.title),
-      createElement("span", "", formatEventTimeRange(event)),
-      createElement("span", "", `Bilet: ${formatTicketPrice(event)}`),
-      createElement("span", "", event.attendanceLoaded
-        ? `${attendanceCountLabel(event)} persoane merg`
-        : event.attendanceError
-          ? "Numărul real de participanți nu este disponibil."
-          : "Se încarcă numărul real de participanți…"),
-      createElement("span", "", event.status === "pending" ? "În verificare" : "Verificat"),
-    );
-    if (event.description) {
-      popup.append(createElement("span", "map-popup-description", event.description));
-    }
-    popup.append(createAttendanceButton(event));
-    const ticketLink = createTicketLink(event);
-    if (ticketLink) popup.append(ticketLink);
+    const eventSection = createElement("section", "map-popup-community-event");
+    appendEventPopupContent(eventSection, event, false);
+    popup.append(eventSection);
   }
   if (!upcomingEvents.length) {
-    popup.append(createElement("span", "map-popup-description", "Nu există evenimente trimise la această locație."));
+    popup.append(createElement("span", "map-popup-description", "Nu există evenimente viitoare la această locație."));
+    const routeDestination = {
+      id: location.id,
+      title: location.name,
+      venue: location.city,
+      latitude: Number(location.latitude),
+      longitude: Number(location.longitude),
+    };
+    popup.append(...createEventTravelActions(routeDestination));
   }
-  const routeDestination = {
-    id: location.id,
-    title: location.name,
-    venue: location.city,
-    latitude: Number(location.latitude),
-    longitude: Number(location.longitude),
-  };
-  popup.append(...createEventTravelActions(routeDestination));
   return popup;
+}
+
+function normalizeLocationName(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("ro")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function eventBelongsToLocation(event, location) {
+  if (event.locationId && event.locationId === location.id) return true;
+
+  const normalizedLocationName = normalizeLocationName(location.name);
+  const normalizedVenue = normalizeLocationName(event.venue);
+  if (normalizedLocationName && normalizedVenue.includes(normalizedLocationName)) return true;
+
+  const eventLatitude = Number(event.latitude);
+  const eventLongitude = Number(event.longitude);
+  const locationLatitude = Number(location.latitude);
+  const locationLongitude = Number(location.longitude);
+  if (![eventLatitude, eventLongitude, locationLatitude, locationLongitude].every(Number.isFinite)) {
+    return false;
+  }
+
+  const latitudeDistance = (eventLatitude - locationLatitude) * 111_320;
+  const longitudeDistance = (eventLongitude - locationLongitude) *
+    111_320 * Math.cos(locationLatitude * Math.PI / 180);
+  return Math.hypot(latitudeDistance, longitudeDistance) <= 100;
 }
 
 function createLocationTooltip(location) {
@@ -428,6 +587,7 @@ function getLocationCategoryIcon(category) {
 
 function setMapLocations(locations) {
   mapLocationsById = new Map(locations.map((location) => [location.id, location]));
+  locationMarkersById = new Map();
   locationLayer.clearLayers();
   const validLocations = locations.filter((location) =>
     Number.isFinite(Number(location.latitude)) &&
@@ -451,6 +611,7 @@ function setMapLocations(locations) {
       [Number(location.latitude), Number(location.longitude)],
       { icon: locationIcon, title: `${location.name} · ${location.category}`, alt: `${location.name}, ${location.city}, ${location.category}` },
     );
+    locationMarkersById.set(location.id, marker);
     marker.bindPopup(() => createLocationPopup(location));
     marker.bindTooltip(() => createLocationTooltip(location), {
       direction: "top",
@@ -507,9 +668,10 @@ function createEventCard(event) {
   const description = createElement("p", "event-description", event.description);
   const details = createElement("div", "event-details");
   details.append(
-    createElement("span", "", formatEventTimeRange(event)),
+    createElement("span", "", `Ziua: ${formatCommunityEventDate(event)}`),
+    createElement("span", "", `Interval: ${formatEventHours(event)}`),
     createElement("span", "", event.venue),
-    createElement("span", "", `Bilet: ${formatTicketPrice(event)}`),
+    createElement("span", "", `Preț bilet: ${formatTicketPrice(event)}`),
   );
 
   const actions = createElement("div", "event-actions");
@@ -575,12 +737,12 @@ function renderEvents() {
   for (const [id, marker] of eventMarkers) {
     const event = events.find((item) => item.id === id);
     if (!event) continue;
-    marker.setIcon(L.divIcon({
-      className: "",
-      html: `<div class="event-map-marker-wrap"><div class="event-map-marker${event.id === selectedEventId ? " active" : ""}${event.tier === "paid" ? " promoted" : ""}"><span>${event.source === "community" ? attendanceCountLabel(event) : "…"}</span></div></div>`,
-      iconSize: [36, 42],
-      iconAnchor: [18, 39],
-    }));
+    marker.setIcon(getEventMarkerIcon(event, event.id === selectedEventId));
+    if (marker.isPopupOpen()) marker.setPopupContent(createEventPopupContent(event));
+  }
+  for (const [id, marker] of locationMarkersById) {
+    const location = mapLocationsById.get(id);
+    if (location && marker.isPopupOpen()) marker.setPopupContent(createLocationPopup(location));
   }
 }
 
@@ -596,6 +758,7 @@ function pruneExpiredEvents() {
   }
   map.closePopup();
   events = activeEvents;
+  updateEventAttendanceSubscriptions();
   renderEvents();
 }
 
@@ -720,8 +883,8 @@ async function loadEvents() {
   const data = await apiRequest(`/api/events?voterId=${encodeURIComponent(voterId)}`);
   const communityEvents = events.filter((event) => event.source === "community");
   events = data.events.concat(communityEvents).filter((event) => !eventHasEnded(event));
-  for (const marker of eventMarkers.values()) map.removeLayer(marker);
-  eventMarkers = new Map(events.map((event) => [event.id, createEventMarker(event)]));
+  updateEventAttendanceSubscriptions();
+  syncEventMarkers();
   renderEvents();
   if (events.length && !userLocation) {
     const bounds = L.latLngBounds(events.map((event) => [event.latitude, event.longitude]));
@@ -904,15 +1067,28 @@ window.FomoRouteContext = {
 window.FomoRefreshCommunityEvents = (communityEvents) => {
   events = events.filter((event) => event.source !== "community")
     .concat(communityEvents.filter((event) => !eventHasEnded(event)));
-  for (const marker of eventMarkers.values()) map.removeLayer(marker);
-  eventMarkers = new Map(events.map((event) => [event.id, createEventMarker(event)]));
+  syncEventMarkers();
+  updateEventAttendanceSubscriptions();
   renderEvents();
 };
 
 window.FomoSetLocations = setMapLocations;
 window.setInterval(pruneExpiredEvents, 30_000);
+function initializeEventAttendance() {
+  updateEventAttendanceSubscriptions();
+  window.FomoFirebase?.auth?.onAuthStateChanged(updateEventAttendanceForUser);
+}
+
+window.addEventListener("fomo-firebase-ready", initializeEventAttendance);
+if (window.FomoFirebase?.configured) initializeEventAttendance();
 
 async function initialize() {
+  if (isGitHubPages()) {
+    renderEvents();
+    setStatus("Evenimentele comunității se încarcă din Firebase. Backendul local nu este necesar pe GitHub Pages.", "success");
+    return;
+  }
+
   try {
     await apiRequest("/health");
     await loadEvents();
