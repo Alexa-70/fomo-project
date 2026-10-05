@@ -5,6 +5,7 @@ votes.json
 *.log
 *.tmp
 node_modules/
+.wrangler/
 
 # Editor and operating-system files
 .vscode/

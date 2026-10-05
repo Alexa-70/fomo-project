@@ -1,0 +1,9 @@
+.git
+.github
+.wrangler
+.vscode
+.idea
+node_modules
+votes.json
+*.log
+*.tmp

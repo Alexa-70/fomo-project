@@ -1,5 +1,6 @@
 param(
-  [int]$Port = 5101,
+  [int]$Port = $(if ($env:PORT) { [int]$env:PORT } else { 5101 }),
+  [string]$ListenHost = $(if ($env:FOMO_LISTEN_HOST) { $env:FOMO_LISTEN_HOST } else { "localhost" }),
   [string]$OsrmBaseUrl = $(if ($env:OSRM_BASE_URL) { $env:OSRM_BASE_URL } else { "https://router.project-osrm.org" }),
   [string]$NominatimBaseUrl = $(if ($env:NOMINATIM_BASE_URL) { $env:NOMINATIM_BASE_URL } else { "https://nominatim.openstreetmap.org" }),
   [string]$NominatimUserAgent = $(if ($env:NOMINATIM_USER_AGENT) { $env:NOMINATIM_USER_AGENT } else { "RouteMateMap/1.0 (local development)" })
@@ -8,9 +9,55 @@ param(
 $ErrorActionPreference = "Stop"
 $script:geocodeCache = @{}
 $script:lastGeocodeRequest = [DateTimeOffset]::MinValue
+$script:assistantRateLimits = @{}
 $script:eventsFile = Join-Path $PSScriptRoot "events.json"
-$script:votesFile = Join-Path $PSScriptRoot "votes.json"
+$script:votesFile = if ($env:FOMO_VOTES_FILE) { $env:FOMO_VOTES_FILE } else { Join-Path $PSScriptRoot "votes.json" }
 $script:realtimeDatabaseUrl = "https://fomo-68a85-default-rtdb.firebaseio.com"
+
+function Test-AssistantRateLimit {
+  param([System.Net.HttpListenerRequest]$Request)
+
+  $forwardedIp = [string]$Request.Headers["CF-Connecting-IP"]
+  if ([string]::IsNullOrWhiteSpace($forwardedIp)) {
+    $forwardedFor = [string]$Request.Headers["X-Forwarded-For"]
+    if (-not [string]::IsNullOrWhiteSpace($forwardedFor)) {
+      $forwardedIp = ($forwardedFor -split ",")[-1].Trim()
+    }
+  }
+  if ([string]::IsNullOrWhiteSpace($forwardedIp) -and $null -ne $Request.RemoteEndPoint) {
+    $forwardedIp = $Request.RemoteEndPoint.Address.ToString()
+  }
+  if ([string]::IsNullOrWhiteSpace($forwardedIp)) {
+    $forwardedIp = "unknown"
+  }
+  if ($forwardedIp.Length -gt 64) {
+    $forwardedIp = "unknown"
+  }
+
+  $now = [DateTimeOffset]::UtcNow
+  $entry = $script:assistantRateLimits[$forwardedIp]
+  if ($null -eq $entry -or ($now - $entry["startedAt"]).TotalSeconds -ge 60) {
+    $script:assistantRateLimits[$forwardedIp] = @{
+      startedAt = $now
+      count = 1
+    }
+  }
+  elseif ($entry["count"] -ge 8) {
+    return $false
+  }
+  else {
+    $entry["count"] = [int]$entry["count"] + 1
+  }
+
+  if ($script:assistantRateLimits.Count -gt 5000) {
+    foreach ($key in @($script:assistantRateLimits.Keys)) {
+      if (($now - $script:assistantRateLimits[$key]["startedAt"]).TotalSeconds -ge 60) {
+        $script:assistantRateLimits.Remove($key)
+      }
+    }
+  }
+  return $true
+}
 
 function Get-PublicAssistantCatalog {
   $locationsResponse = Invoke-RestMethod `
@@ -158,6 +205,28 @@ function Get-Coordinate {
   return $parsed
 }
 
+function Read-LimitedRequestBody {
+  param(
+    [System.Net.HttpListenerRequest]$Request,
+    [long]$MaximumBytes
+  )
+
+  $bodyStream = [System.IO.MemoryStream]::new()
+  try {
+    $buffer = New-Object byte[] 4096
+    while (($bytesRead = $Request.InputStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+      if ($bodyStream.Length + $bytesRead -gt $MaximumBytes) {
+        return $null
+      }
+      $bodyStream.Write($buffer, 0, $bytesRead)
+    }
+    return $Request.ContentEncoding.GetString($bodyStream.ToArray())
+  }
+  finally {
+    $bodyStream.Dispose()
+  }
+}
+
 function Invoke-MapRequest {
   param([System.Net.HttpListenerContext]$Context)
 
@@ -217,6 +286,13 @@ function Invoke-MapRequest {
       return
     }
 
+    if (-not (Test-AssistantRateLimit -Request $request)) {
+      Write-JsonResponse -Context $Context -StatusCode 429 -Body @{
+        error = "Ai trimis prea multe întrebări. Încearcă din nou într-un minut."
+      }
+      return
+    }
+
     if ([string]::IsNullOrWhiteSpace($env:GROQ_API_KEY)) {
       Write-JsonResponse -Context $Context -StatusCode 503 -Body @{
         error = "Asistentul AI nu este configurat. Seteaza variabila GROQ_API_KEY si reporneste serverul."
@@ -230,12 +306,17 @@ function Invoke-MapRequest {
     }
 
     try {
-      $reader = [System.IO.StreamReader]::new($request.InputStream, $request.ContentEncoding)
-      try {
-        $assistantBody = $reader.ReadToEnd() | ConvertFrom-Json
+      $assistantJson = Read-LimitedRequestBody -Request $request -MaximumBytes 32768
+      if ($null -eq $assistantJson) {
+        Write-JsonResponse -Context $Context -StatusCode 413 -Body @{ error = "Assistant request is too large." }
+        return
       }
-      finally {
-        $reader.Dispose()
+      try {
+        $assistantBody = ConvertFrom-Json -InputObject $assistantJson
+      }
+      catch {
+        Write-JsonResponse -Context $Context -StatusCode 400 -Body @{ error = "Assistant request must contain valid JSON." }
+        return
       }
 
       $userMessage = [string]$assistantBody.message
@@ -826,11 +907,11 @@ $contextJson
 }
 
 $listener = [System.Net.HttpListener]::new()
-$listener.Prefixes.Add("http://localhost:$Port/")
+$listener.Prefixes.Add("http://$($ListenHost):$Port/")
 
 try {
   $listener.Start()
-  Write-Host "Map routing API listening on http://localhost:$Port/"
+  Write-Host "FOMO server listening on http://$($ListenHost):$Port/"
   while ($listener.IsListening) {
     try {
       $context = $listener.GetContext()

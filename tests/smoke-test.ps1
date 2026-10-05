@@ -60,7 +60,7 @@ try {
     throw "Endpointul /health a întors un status neașteptat."
   }
 
-  foreach ($asset in @("app.js", "route-planner.js", "ride-sharing.js", "styles.css", "firebase-config.js", "firebase-client.js", "account-panel.js", "account-panel.css", "buttons-ui/buttons-ui.js", "buttons-ui/buttons-ui.css", "event-workflow.js", "promotion-payment.html", "promotion-payment.css", "promotion-payment.js", "locations.json", "database.rules.json")) {
+  foreach ($asset in @("app.js", "route-planner.js", "ride-sharing.js", "styles.css", "firebase-config.js", "firebase-client.js", "account-panel.js", "account-panel.css", "buttons-ui/buttons-ui.js", "buttons-ui/buttons-ui.css", "event-workflow.js", "promotion-payment.html", "promotion-payment.css", "promotion-payment.js", "ai-assistant.js", "assistant-config.js", "locations.json", "database.rules.json")) {
 
     $assetResponse = Invoke-WebRequest -Uri "$baseUrl/$asset" -UseBasicParsing -TimeoutSec 5
     if ($assetResponse.StatusCode -ne 200) {
@@ -77,18 +77,45 @@ try {
     $assistantStyle -notmatch "touch-action:\s*none") {
     throw "The assistant launcher must support pointer dragging, persisted positioning, and keyboard movement."
   }
+  $sharedAssistantConfig = Get-Content -LiteralPath (Join-Path $projectRoot "assistant-config.js") -Raw -Encoding UTF8
   $appScript = Get-Content -LiteralPath (Join-Path $projectRoot "app.js") -Raw -Encoding UTF8
+  $serverSource = Get-Content -LiteralPath $serverScript -Raw -Encoding UTF8
+  $dockerfile = Get-Content -LiteralPath (Join-Path $projectRoot "Dockerfile") -Raw -Encoding UTF8
+  $renderConfig = Get-Content -LiteralPath (Join-Path $projectRoot "render.yaml") -Raw -Encoding UTF8
+  if (-not $sharedAssistantConfig.Contains('window.FOMO_API_BASE_URL = "https://fomo-ai-backend.onrender.com"') -or
+    -not $appScript.Contains("window.FOMO_API_BASE_URL") -or
+    -not $serverSource.Contains('GROQ_API_KEY') -or
+    -not $serverSource.Contains('Test-AssistantRateLimit') -or
+    -not $serverSource.Contains('X-Forwarded-For') -or
+    -not $serverSource.Contains('$($ListenHost):$Port') -or
+    -not $dockerfile.Contains("mcr.microsoft.com/powershell:7.5-ubuntu-22.04") -or
+    -not $dockerfile.Contains('pwsh') -or
+    -not $renderConfig.Contains('runtime: docker') -or
+    -not $renderConfig.Contains('healthCheckPath: /health') -or
+    -not $renderConfig.Contains('key: GROQ_API_KEY') -or
+    -not $renderConfig.Contains('sync: false') -or
+    -not $serverSource.Contains('Read-LimitedRequestBody') -or
+    -not $serverSource.Contains('Assistant request is too large.') -or
+    $dockerfile -match "gsk_[A-Za-z0-9]{20,}" -or
+    $renderConfig -match "gsk_[A-Za-z0-9]{20,}") {
+    throw "The shared PowerShell backend must be deployable on Render with its Groq key configured as a secret."
+  }
   $buttonsScript = Get-Content -LiteralPath (Join-Path $projectRoot "buttons-ui\buttons-ui.js") -Raw -Encoding UTF8
   $rideSharingScript = Get-Content -LiteralPath (Join-Path $projectRoot "ride-sharing.js") -Raw -Encoding UTF8
   $settingsScript = Get-Content -LiteralPath (Join-Path $projectRoot "settings-panel.js") -Raw -Encoding UTF8
   $routeScript = Get-Content -LiteralPath (Join-Path $projectRoot "route-planner.js") -Raw -Encoding UTF8
   $indexHtml = Get-Content -LiteralPath (Join-Path $projectRoot "index.html") -Raw -Encoding UTF8
+  if ([regex]::Matches($indexHtml, '<script src="\./assistant-config\.js\?v=shared-powershell-backend-v1"').Count -ne 1 -or
+    [regex]::Matches($indexHtml, '<script src="\./ai-assistant\.js\?v=shared-powershell-backend-v1"').Count -ne 1 -or
+    $indexHtml.IndexOf('assistant-config.js?v=shared-powershell-backend-v1', [StringComparison]::Ordinal) -gt $indexHtml.IndexOf('ai-assistant.js?v=shared-powershell-backend-v1', [StringComparison]::Ordinal)) {
+    throw "The shared assistant endpoint configuration must load before the assistant client."
+  }
   $styleSheet = Get-Content -LiteralPath (Join-Path $projectRoot "styles.css") -Raw -Encoding UTF8
   $buttonsStyle = Get-Content -LiteralPath (Join-Path $projectRoot "buttons-ui\buttons-ui.css") -Raw -Encoding UTF8
   if ([regex]::Matches($indexHtml, '<script src="\./app\.js').Count -ne 1 -or
     [regex]::Matches($indexHtml, '<script src="\./buttons-ui/buttons-ui\.js').Count -ne 1 -or
     [regex]::Matches($indexHtml, '<link rel="stylesheet" href="\./styles\.css\?v=event-popup-layout-v1"').Count -ne 1 -or
-    [regex]::Matches($indexHtml, '<script src="\./app\.js\?v=event-popup-layout-v1"').Count -ne 1 -or
+    [regex]::Matches($indexHtml, '<script src="\./app\.js\?v=shared-powershell-backend-v1"').Count -ne 1 -or
     [regex]::Matches($indexHtml, '<script src="\./event-workflow\.js\?v=public-events-promotion-demo-v1"').Count -ne 1 -or
     $indexHtml -notmatch '<section class="profile-section" aria-labelledby="profile-badges-heading" hidden>' -or
     -not $buttonsScript.Contains('profileBadgesSection.hidden = !user;') -or
@@ -404,7 +431,6 @@ try {
     throw "Lista de prieteni nu trebuie să fie salvată doar local."
   }
 
-  $serverSource = Get-Content -LiteralPath $serverScript -Raw -Encoding UTF8
   $catalogStart = $serverSource.IndexOf("function Get-PublicAssistantCatalog", [System.StringComparison]::Ordinal)
   $catalogEnd = $serverSource.IndexOf("function Get-VoteStore", [System.StringComparison]::Ordinal)
   if ($catalogStart -lt 0 -or $catalogEnd -le $catalogStart) {
@@ -450,7 +476,7 @@ try {
     }
   }
 
-  Write-Output "Smoke test passed: API, Firebase assets, empty demo event catalog and 90 seeded locations are valid."
+  Write-Output "Smoke test passed: API, shared PowerShell hosting configuration, Firebase assets, empty demo event catalog and 90 seeded locations are valid."
 }
 finally {
   if ($null -ne $serverProcess -and -not $serverProcess.HasExited) {

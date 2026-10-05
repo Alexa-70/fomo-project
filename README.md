@@ -1,4 +1,4 @@
-# Locally — evenimente și trasee pe hartă
+# FOMO — evenimente și trasee pe hartă
 
 Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar ruta auto către evenimente și locații este afișată în aplicație. Transportul public se deschide în Google Maps. Interfața folosește Leaflet și OpenStreetMap; backendul PowerShell oferă lista de evenimente și voturi și caută locații cu Nominatim.
 
@@ -15,7 +15,7 @@ Aplicație pentru descoperirea evenimentelor locale: evenimentele apar pe o hart
 
 Backendul pornește la `http://localhost:5101/`. Lasă fereastra PowerShell deschisă cât folosești aplicația.
 
-3. Deschide `http://localhost:5101/` sau pornește `index.html` prin VS Code Live Server. Pentru căutarea adreselor și rutarea locală, păstrează backendul pornit pe portul `5101`; aplicația detectează automat Live Server local și trimite cererile API către backend. Pe GitHub Pages, harta și evenimentele comunității se încarcă fără backendul local; Groq și funcțiile API locale nu sunt disponibile acolo. Deschiderea directă a paginii cu `file://` poate fi limitată de browser; folosește Live Server. Este necesară conexiune la internet pentru librăria Leaflet, căutarea locațiilor și dalele hărții.
+3. Deschide `http://localhost:5101/` sau pornește `index.html` prin VS Code Live Server. Pentru căutarea adreselor, voturi și asistent, păstrează backendul pornit pe portul `5101`; aplicația detectează automat Live Server local și trimite cererile API către backend. Pe GitHub Pages, harta și evenimentele comunității se încarcă fără backendul local, dar funcțiile API folosesc backendul comun Render configurat în `assistant-config.js`. Deschiderea directă a paginii cu `file://` poate fi limitată de browser; folosește Live Server. Este necesară conexiune la internet pentru librăria Leaflet, căutarea locațiilor și dalele hărții.
 
 Dacă Windows blochează rularea scripturilor, pornește serverul explicit:
 
@@ -23,7 +23,19 @@ Dacă Windows blochează rularea scripturilor, pornește serverul explicit:
 powershell -ExecutionPolicy Bypass -File .\server.ps1
 ```
 
-Fiecare coleg trebuie să pornească propriul backend local după ce descarcă sau actualizează codul. Verifică `http://localhost:5101/health`; răspunsul trebuie să fie `{"status":"ok"}`. Dacă ruta nu pornește, verifică mesajul afișat în aplicație și confirmă că backendul rulează pe portul `5101` și că există conexiune la internet pentru serviciul OSRM.
+Verifică `http://localhost:5101/health`; răspunsul trebuie să fie `{"status":"ok"}`. Dacă ruta nu pornește, verifică mesajul afișat în aplicație și confirmă că backendul rulează pe portul `5101` și că există conexiune la internet pentru serviciul OSRM.
+
+## Găzduire comună: Render
+
+`Dockerfile` rulează aplicația și backendul PowerShell 7 în același serviciu web. Blueprint-ul `render.yaml` configurează un serviciu Render Free și cere `GROQ_API_KEY` ca secret, fără să îl salveze în repository.
+
+1. Creează/folosește un cont la [Render](https://dashboard.render.com/) și conectează GitHub.
+2. În Render alege **New → Blueprint**, selectează repository-ul `Alexa-70/fomo-project` și ramura cu această schimbare, apoi confirmă serviciul `fomo-ai-backend`.
+3. La configurarea Blueprint-ului, adaugă cheia Groq nouă numai în câmpul secret `GROQ_API_KEY`. Nu o introduce în GitHub, în `render.yaml` sau în chat. `GROQ_MODEL` este setat automat.
+4. Așteaptă build-ul Docker și verifică endpointul `https://<adresa-render>/health`; răspunsul trebuie să fie `{"status":"ok"}`.
+5. Copiază adresa publică afișată de Render în `assistant-config.js`, la `window.FOMO_API_BASE_URL`. Blueprint-ul propune `https://fomo-ai-backend.onrender.com`; dacă Render atribuie altă adresă, înlocuiește-o cu valoarea reală și publică schimbarea pe GitHub. Site-ul servit chiar de Render folosește backendul pe aceeași origine; GitHub Pages va trimite către URL-ul Render configurat.
+
+Render Free este destinat proiectelor de test/prototip, nu producției: serviciul se oprește după 15 minute fără trafic și poate avea nevoie de aproximativ un minut să pornească la următoarea cerere. Fișierul de voturi din container este temporar și se pierde la restart/deploy/sleep; datele persistente trebuie ținute într-o bază de date. Cererile AI au o limită best-effort de 8 pe minut per IP, dar serviciul este public și limita nu protejează împotriva abuzului distribuit. Groq are propriile limite și eventuale costuri.
 
 ## Lucrul în echipă
 
@@ -71,7 +83,9 @@ Trimite întrebarea și istoricul recent către asistentul Groq. Serverul adaug�
 
 Comportamentul asistentului este ghidat prin instrucțiunile din `server.ps1`, nu prin reantrenarea modelului. Acesta poate căuta cele 90 de locații după oraș, nume și categorie, recomanda evenimente aprobate și interpreta traseul recent; datele sunt citite la fiecare întrebare. Dacă Realtime Database nu este disponibilă, endpointul întoarce o eroare în loc să răspundă folosind date incomplete. Asistentul nu poate actualiza voturi sau setări în locul utilizatorului.
 
-Asistentul este disponibil din butonul „Întreabă FOMO”. Pentru a-l configura, setează cheia numai în sesiunea PowerShell în care pornești serverul:
+Asistentul este disponibil din butonul „Întreabă FOMO”. Pentru utilizarea comună pe toate laptopurile, `GROQ_API_KEY` se configurează o singură dată ca secret în Render. Nu pune cheia în browser, în repository sau în `assistant-config.js`. Toate dispozitivele folosesc același endpoint `/api/assistant` al backendului public.
+
+Pentru dezvoltare locală, setează cheia numai în procesul PowerShell în care pornești serverul:
 
 ```powershell
 $env:GROQ_API_KEY = Read-Host "GROQ_API_KEY"
@@ -79,7 +93,7 @@ $env:GROQ_MODEL = "openai/gpt-oss-120b"
 .\start.ps1
 ```
 
-`GROQ_MODEL` este opțional și implicit este `openai/gpt-oss-120b`. Nu salva cheia în fișierele proiectului și nu o trimite din browser. Dacă cheia lipsește, endpointul întoarce `503`; dacă Groq nu răspunde, întoarce `502`.
+Nu salva cheia în fișierele proiectului și nu o trimite din browser. Dacă cheia lipsește, endpointul local întoarce `503`; dacă Groq nu răspunde, întoarce `502`.
 
 ## Firebase: conturi, locații și moderare
 

@@ -9,7 +9,10 @@ function getApiBaseUrl() {
   const localHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
   const isLocalFrontend = window.location.protocol === "file:" ||
     (localHosts.has(window.location.hostname) && window.location.port !== "5101");
-  return isLocalFrontend ? "http://localhost:5101" : "";
+  if (isLocalFrontend) return "http://localhost:5101";
+  if (localHosts.has(window.location.hostname)) return "";
+
+  return String(window.FOMO_API_BASE_URL || "").trim().replace(/\/+$/, "");
 }
 
 const API_BASE_URL = getApiBaseUrl();
@@ -137,7 +140,10 @@ async function apiRequest(path, options = {}) {
   } catch (error) {
     if (error instanceof TypeError) {
       const backendUrl = API_BASE_URL || window.location.origin;
-      throw new Error(`Nu mă pot conecta la backendul FOMO (${backendUrl}). Pornește backendul cu .\\start.ps1 și reîncarcă pagina.`);
+      const localBackendHint = window.FOMO_API_BASE_URL
+        ? "Verifică dacă serviciul găzduit este pornit și reîncarcă pagina."
+        : "Pornește backendul local cu .\\start.ps1 și reîncarcă pagina.";
+      throw new Error(`Nu mă pot conecta la backendul FOMO (${backendUrl}). ${localBackendHint}`);
     }
     throw error;
   }
