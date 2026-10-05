@@ -288,15 +288,7 @@
           route,
         }),
       };
-      const assistantApiUrl = String(window.FOMO_ASSISTANT_API_URL || "").replace(/\/+$/, "");
-      let data;
-      if (assistantApiUrl) {
-        const response = await fetch(`${assistantApiUrl}/api/assistant`, requestOptions);
-        data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Cererea către asistent nu a reușit.");
-      } else {
-        data = await window.FomoRouteContext.apiRequest("/api/assistant", requestOptions);
-      }
+      const data = await window.FomoRouteContext.apiRequest("/api/assistant", requestOptions);
       if (typeof data.reply !== "string" || !data.reply.trim()) {
         throw new Error("Asistentul a returnat un răspuns gol.");
       }

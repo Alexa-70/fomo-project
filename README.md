@@ -1,4 +1,4 @@
-# Locally — evenimente și trasee pe hartă
+# FOMO — evenimente și trasee pe hartă
 
 Prototip pentru descoperirea evenimentelor locale: evenimentele apar pe o hartă interactivă, utilizatorii pot vota planurile comunității, iar ruta auto către evenimente și locații este afișată în aplicație. Transportul public se deschide în Google Maps. Interfața folosește Leaflet și OpenStreetMap; backendul PowerShell oferă lista de evenimente și voturi și caută locații cu Nominatim.
 
@@ -15,7 +15,7 @@ Aplicație pentru descoperirea evenimentelor locale: evenimentele apar pe o hart
 
 Backendul pornește la `http://localhost:5101/`. Lasă fereastra PowerShell deschisă cât folosești aplicația.
 
-3. Deschide `http://localhost:5101/` sau pornește `index.html` prin VS Code Live Server. Pentru căutarea adreselor și rutarea locală, păstrează backendul pornit pe portul `5101`; aplicația detectează automat Live Server local și trimite cererile API către backend. Pe GitHub Pages, harta și evenimentele comunității se încarcă fără backendul local; Groq și funcțiile API locale nu sunt disponibile acolo. Deschiderea directă a paginii cu `file://` poate fi limitată de browser; folosește Live Server. Este necesară conexiune la internet pentru librăria Leaflet, căutarea locațiilor și dalele hărții.
+3. Deschide `http://localhost:5101/` sau pornește `index.html` prin VS Code Live Server. Pentru căutarea adreselor, voturi și asistent, păstrează backendul pornit pe portul `5101`; aplicația detectează automat Live Server local și trimite cererile API către backend. Pe GitHub Pages, harta și evenimentele comunității se încarcă fără backendul local, dar funcțiile API folosesc backendul comun Render configurat în `assistant-config.js`. Deschiderea directă a paginii cu `file://` poate fi limitată de browser; folosește Live Server. Este necesară conexiune la internet pentru librăria Leaflet, căutarea locațiilor și dalele hărții.
 
 Dacă Windows blochează rularea scripturilor, pornește serverul explicit:
 
@@ -23,7 +23,19 @@ Dacă Windows blochează rularea scripturilor, pornește serverul explicit:
 powershell -ExecutionPolicy Bypass -File .\server.ps1
 ```
 
-Fiecare coleg trebuie să pornească propriul backend local după ce descarcă sau actualizează codul. Verifică `http://localhost:5101/health`; răspunsul trebuie să fie `{"status":"ok"}`. Dacă ruta nu pornește, verifică mesajul afișat în aplicație și confirmă că backendul rulează pe portul `5101` și că există conexiune la internet pentru serviciul OSRM.
+Verifică `http://localhost:5101/health`; răspunsul trebuie să fie `{"status":"ok"}`. Dacă ruta nu pornește, verifică mesajul afișat în aplicație și confirmă că backendul rulează pe portul `5101` și că există conexiune la internet pentru serviciul OSRM.
+
+## Găzduire comună: Render
+
+`Dockerfile` rulează aplicația și backendul PowerShell 7 în același serviciu web. Blueprint-ul `render.yaml` configurează un serviciu Render Free și cere `GROQ_API_KEY` ca secret, fără să îl salveze în repository.
+
+1. Creează/folosește un cont la [Render](https://dashboard.render.com/) și conectează GitHub.
+2. În Render alege **New → Blueprint**, selectează repository-ul `Alexa-70/fomo-project` și ramura cu această schimbare, apoi confirmă serviciul `fomo-ai-backend`.
+3. La configurarea Blueprint-ului, adaugă cheia Groq nouă numai în câmpul secret `GROQ_API_KEY`. Nu o introduce în GitHub, în `render.yaml` sau în chat. `GROQ_MODEL` este setat automat.
+4. Așteaptă build-ul Docker și verifică endpointul `https://<adresa-render>/health`; răspunsul trebuie să fie `{"status":"ok"}`.
+5. Copiază adresa publică afișată de Render în `assistant-config.js`, la `window.FOMO_API_BASE_URL`. Blueprint-ul propune `https://fomo-ai-backend.onrender.com`; dacă Render atribuie altă adresă, înlocuiește-o cu valoarea reală și publică schimbarea pe GitHub. Site-ul servit chiar de Render folosește backendul pe aceeași origine; GitHub Pages va trimite către URL-ul Render configurat.
+
+Render Free este destinat proiectelor de test/prototip, nu producției: serviciul se oprește după 15 minute fără trafic și poate avea nevoie de aproximativ un minut să pornească la următoarea cerere. Fișierul de voturi din container este temporar și se pierde la restart/deploy/sleep; datele persistente trebuie ținute într-o bază de date. Cererile AI au o limită best-effort de 8 pe minut per IP, dar serviciul este public și limita nu protejează împotriva abuzului distribuit. Groq are propriile limite și eventuale costuri.
 
 ## Lucrul în echipă
 
@@ -69,42 +81,11 @@ Pentru o integrare de parteneriat la scară, extinde `ride-sharing.js` cu un ada
 
 Trimite întrebarea și istoricul recent către asistentul Groq. Serverul adaugă evenimentele disponibile și preferințele selectate, iar răspunsul este `{ "reply": "..." }`. Pentru întrebări de traseu, interfața trimite către Groq doar numele evenimentului și locația asociată, dacă sunt disponibile; butonul „Cum ajung?” afișează ruta auto în FOMO, iar transportul public se deschide în Google Maps.
 
-Comportamentul asistentului este ghidat prin instrucțiunile din `server.ps1` pentru backendul local și din `cloudflare/assistant-worker.js` pentru versiunea comună, nu prin reantrenarea modelului. Acesta poate căuta cele 90 de locații după oraș, nume și categorie, recomanda evenimente aprobate și interpreta traseul recent; datele sunt citite la fiecare întrebare. Dacă Realtime Database nu este disponibilă, endpointul întoarce o eroare în loc să răspundă folosind date incomplete. Asistentul nu poate actualiza voturi sau setări în locul utilizatorului.
+Comportamentul asistentului este ghidat prin instrucțiunile din `server.ps1`, nu prin reantrenarea modelului. Acesta poate căuta cele 90 de locații după oraș, nume și categorie, recomanda evenimente aprobate și interpreta traseul recent; datele sunt citite la fiecare întrebare. Dacă Realtime Database nu este disponibilă, endpointul întoarce o eroare în loc să răspundă folosind date incomplete. Asistentul nu poate actualiza voturi sau setări în locul utilizatorului.
 
-Asistentul este disponibil din butonul „Întreabă FOMO”. Pentru utilizarea comună pe toate laptopurile, aplicația poate apela un Cloudflare Worker găzduit, iar cheia Groq rămâne numai în secretul Worker-ului. Endpointul este public și are o limită best-effort de 8 cereri pe minut per IP; starea limitei este locală instanței Worker și nu oprește abuzul distribuit. Pentru protecție mai puternică, activează Cloudflare Turnstile sau cere autentificare înainte de utilizare.
+Asistentul este disponibil din butonul „Întreabă FOMO”. Pentru utilizarea comună pe toate laptopurile, `GROQ_API_KEY` se configurează o singură dată ca secret în Render. Nu pune cheia în browser, în repository sau în `assistant-config.js`. Toate dispozitivele folosesc același endpoint `/api/assistant` al backendului public.
 
-Configurarea comună se face o singură dată pentru proiect:
-
-1. Revocă orice cheie Groq care a fost expusă și generează una nouă. Nu o trimite în chat și nu o adăuga într-un fișier.
-2. Instalează Node.js, apoi autentifică Wrangler în contul Cloudflare:
-
-```powershell
-npx --yes wrangler@latest login
-```
-
-3. Publică Worker-ul inițial:
-
-   ```powershell
-   npx --yes wrangler@latest deploy --config .\cloudflare\wrangler.toml
-   ```
-
-4. Adaugă cheia nouă ca secret Cloudflare. Wrangler o cere interactiv; nu o pune în comandă. Comanda publică imediat noua versiune a Worker-ului:
-
-   ```powershell
-   npx --yes wrangler@latest secret put GROQ_API_KEY --config .\cloudflare\wrangler.toml
-   ```
-
-5. Wrangler afișează adresa publică `https://fomo-groq-assistant.<subdomeniul-contului>.workers.dev`. Pune acea adresă fără `/api/assistant` în `assistant-config.js` ca valoare pentru `window.FOMO_ASSISTANT_API_URL`, apoi publică schimbarea site-ului. De atunci orice laptop care folosește versiunea publicată a site-ului apelează același Worker; nu mai setează cheia local.
-
-   Exemplu de configurare, înlocuiește adresa cu cea afișată de Wrangler:
-
-   ```js
-   window.FOMO_ASSISTANT_API_URL = "https://fomo-groq-assistant.subdomeniul-tau.workers.dev";
-   ```
-
-Cloudflare Workers Free include 100.000 de cereri pe zi și 10 ms CPU per invocare; Groq are limite și eventuale costuri separate, în funcție de cont/model. Cheia rămâne doar în Cloudflare. CORS permite domeniul GitHub Pages al proiectului și localhost pentru dezvoltare, dar CORS nu este autentificare și nu oprește apelurile directe către endpoint.
-
-Dacă `assistant-config.js` este gol, dezvoltarea locală folosește endpointul PowerShell existent. Pentru acel mod local, setează cheia numai în procesul PowerShell în care pornești serverul:
+Pentru dezvoltare locală, setează cheia numai în procesul PowerShell în care pornești serverul:
 
 ```powershell
 $env:GROQ_API_KEY = Read-Host "GROQ_API_KEY"

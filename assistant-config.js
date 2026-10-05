@@ -1,1 +1,1 @@
-window.FOMO_ASSISTANT_API_URL = "https://fomo-groq-assistant.swatmat.workers.dev";
+window.FOMO_API_BASE_URL = "https://fomo-ai-backend.onrender.com";
