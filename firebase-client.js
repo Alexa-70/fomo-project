@@ -32,7 +32,31 @@
 
         const profileRef = db.ref(`users/${user.uid}`);
         const existingProfile = await profileRef.once("value");
-        if (existingProfile.exists()) return existingProfile.val();
+        if (existingProfile.exists()) {
+          const profile = existingProfile.val();
+          const needsGamificationDefaults =
+            !Object.prototype.hasOwnProperty.call(profile, "xp") ||
+            !Object.prototype.hasOwnProperty.call(profile, "level") ||
+            !Object.prototype.hasOwnProperty.call(profile, "rank_title");
+
+          if (!needsGamificationDefaults) return profile;
+
+          const migration = await profileRef.transaction((currentProfile) => {
+            if (!currentProfile) return;
+            return {
+              ...currentProfile,
+              xp: currentProfile.xp === undefined ? 0 : currentProfile.xp,
+              level: currentProfile.level === undefined ? 1 : currentProfile.level,
+              rank_title: currentProfile.rank_title === undefined
+                ? "FOMO Explorer"
+                : currentProfile.rank_title,
+            };
+          });
+          if (!migration.committed || !migration.snapshot.exists()) {
+            throw new Error("Profilul nu a putut fi actualizat la schema de gamification.");
+          }
+          return migration.snapshot.val();
+        }
 
         const emailName = user.email.split("@")[0].slice(0, 80);
         const username = typeof user.displayName === "string" && user.displayName.trim()
@@ -42,6 +66,9 @@
           email: user.email,
           username,
           createdAt: firebase.database.ServerValue.TIMESTAMP,
+          xp: 0,
+          level: 1,
+          rank_title: "FOMO Explorer",
         };
 
         try {

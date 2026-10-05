@@ -256,6 +256,7 @@
     if (typeof window.FomoRefreshCommunityEvents === "function") {
       window.FomoRefreshCommunityEvents(state.events.map((event) => ({
         id: `community-${event.id}`,
+        firebaseEventId: event.id,
         title: event.title,
         category: event.category,
         description: event.description,
@@ -403,10 +404,28 @@
         startsAtMs: startsAt.getTime(),
         submittedAt: firebase.database.ServerValue.TIMESTAMP,
       };
-      await api.db.ref("communityEvents").push(eventData);
+      const createdEvent = await api.db.ref("communityEvents").push(eventData);
       ui.form.reset();
-      await loadData();
-      setStatus("Propunerea a fost trimisă ownerului locației pentru verificare.", "success");
+      let submissionStatus = "Propunerea a fost trimisă ownerului locației pentru verificare.";
+      let submissionStatusType = "success";
+      try {
+        const xpResult = await window.FomoGamification.awardXp("event_created", createdEvent.key);
+        submissionStatus = xpResult.xpAwarded
+          ? "Propunerea a fost trimisă ownerului locației și ai primit 50 XP."
+          : "Propunerea a fost trimisă; XP-ul pentru ea fusese deja acordat.";
+      } catch (xpError) {
+        console.error("Event proposal succeeded, but XP could not be awarded.", xpError);
+        submissionStatus = `Evenimentul a fost trimis, dar XP nu a putut fi acordat: ${xpError.message}`;
+        submissionStatusType = "error";
+      }
+      try {
+        await loadData();
+      } catch (refreshError) {
+        console.error("Event proposal succeeded, but the event list could not refresh.", refreshError);
+        submissionStatus += ` Lista nu s-a putut actualiza: ${refreshError.message}`;
+        submissionStatusType = "error";
+      }
+      setStatus(submissionStatus, submissionStatusType);
     } catch (error) {
       setStatus(error.message, "error");
     } finally {

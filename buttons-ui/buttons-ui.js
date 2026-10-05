@@ -254,6 +254,15 @@
           renderFriends();
           renderFriendRequests();
           friendsStatus.textContent = `Acum ești prieten(ă) cu ${request.fromUsername}.`;
+          try {
+            const xpResult = await window.FomoGamification.awardXp("friend_connected", requesterUid);
+            friendsStatus.textContent = xpResult.xpAwarded
+              ? `Acum ești prieten(ă) cu ${request.fromUsername} și ai primit 15 XP.`
+              : `Acum ești prieten(ă) cu ${request.fromUsername}. XP-ul pentru această conectare fusese deja acordat.`;
+          } catch (xpError) {
+            console.error("Friend connection succeeded, but XP could not be awarded.", xpError);
+            friendsStatus.textContent = `Conectarea cu ${request.fromUsername} a reușit, dar XP nu a putut fi acordat: ${xpError.message}`;
+          }
         } catch (error) {
           acceptButton.disabled = false;
           friendsStatus.textContent = `Nu am putut accepta cererea: ${error.message}`;
@@ -434,6 +443,7 @@
   async function renderProfileAccount(user) {
     const api = window.FomoFirebase;
     if (!api || !api.configured) {
+      if (window.FomoProfileXPBar) window.FomoProfileXPBar.clear();
       profileAuthSwitch.hidden = true;
       profileLoginForm.hidden = true;
       profileSignupForm.hidden = true;
@@ -449,6 +459,7 @@
     }
 
     if (!user) {
+      if (window.FomoProfileXPBar) window.FomoProfileXPBar.clear();
       profileAuthSwitch.hidden = false;
       profileAuthAccount.hidden = true;
       profileEditName.hidden = false;
@@ -470,6 +481,7 @@
     profileUsername.textContent = user.displayName || user.email || "Utilizator";
     setProfileAuthStatus("");
     profileAuthEmail.textContent = `${user.email || ""}${user.emailVerified ? " · email confirmat" : " · email neconfirmat"}`;
+    if (window.FomoProfileXPBar) await window.FomoProfileXPBar.mount(user);
     return true;
   }
 
@@ -515,6 +527,9 @@
         email,
         username,
         createdAt: firebase.database.ServerValue.TIMESTAMP,
+        xp: 0,
+        level: 1,
+        rank_title: "FOMO Explorer",
       });
       await window.FomoFirebase.db.ref(`publicProfiles/${credential.user.uid}`).set({
         username,

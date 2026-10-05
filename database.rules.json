@@ -13,8 +13,8 @@
     "users": {
       "$uid": {
         ".read": "auth != null && (auth.uid == $uid || (auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true))",
-        ".write": "auth != null && auth.uid == $uid && auth.token.email != null",
-        ".validate": "newData.hasChildren(['email', 'username', 'createdAt']) && newData.child('email').val() == auth.token.email && newData.child('username').isString() && newData.child('username').val().length > 0 && newData.child('username').val().length <= 80 && newData.child('createdAt').isNumber()",
+        ".write": "auth != null && ((auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true) || (auth.uid == $uid && auth.token.email != null && ((!data.exists() && newData.child('xp').val() == 0 && newData.child('level').val() == 1 && newData.child('rank_title').val() == 'FOMO Explorer') || (data.exists() && ((data.child('xp').exists() && newData.child('xp').val() == data.child('xp').val()) || (!data.child('xp').exists() && newData.child('xp').val() == 0)) && ((data.child('level').exists() && newData.child('level').val() == data.child('level').val()) || (!data.child('level').exists() && newData.child('level').val() == 1)) && ((data.child('rank_title').exists() && newData.child('rank_title').val() == data.child('rank_title').val()) || (!data.child('rank_title').exists() && newData.child('rank_title').val() == 'FOMO Explorer')))))",
+        ".validate": "newData.hasChildren(['email', 'username', 'createdAt', 'xp', 'level', 'rank_title']) && (newData.child('email').val() == auth.token.email || (auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true && newData.child('email').val() == data.child('email').val())) && newData.child('username').isString() && newData.child('username').val().length > 0 && newData.child('username').val().length <= 80 && newData.child('createdAt').isNumber() && newData.child('xp').isNumber() && newData.child('xp').val() >= 0 && newData.child('xp').val() % 1 == 0 && newData.child('level').isNumber() && newData.child('level').val() >= 1 && newData.child('level').val() % 1 == 0 && newData.child('rank_title').isString() && newData.child('rank_title').val().length > 0 && newData.child('rank_title').val().length <= 60",
         "email": {
           ".validate": "newData.isString()"
         },
@@ -24,8 +24,78 @@
         "createdAt": {
           ".validate": "newData.isNumber()"
         },
+        "xp": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() % 1 == 0"
+        },
+        "level": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() % 1 == 0"
+        },
+        "rank_title": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+        },
         "$other": {
           ".validate": false
+        }
+      }
+    },
+    "rewards": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true",
+      "$rewardId": {
+        ".read": "auth != null && auth.token.email_verified == true && (root.child('admins').child(auth.uid).val() == true || root.child('user_rewards').child(auth.uid).child($rewardId).exists())",
+        ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true",
+        ".validate": "newData.hasChildren(['title', 'description', 'required_level', 'partner_name', 'promo_code']) && newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('description').isString() && newData.child('description').val().length > 0 && newData.child('required_level').isNumber() && newData.child('required_level').val() >= 1 && newData.child('required_level').val() % 1 == 0 && newData.child('partner_name').isString() && newData.child('partner_name').val().length > 0 && newData.child('promo_code').isString() && newData.child('promo_code').val().length > 0",
+        "title": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "description": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "required_level": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() % 1 == 0"
+        },
+        "partner_name": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "promo_code": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "user_rewards": {
+      "$uid": {
+        ".read": "auth != null && auth.token.email_verified == true && (auth.uid == $uid || root.child('admins').child(auth.uid).val() == true)",
+        "$rewardId": {
+          ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true",
+          ".validate": "newData.hasChildren(['is_redeemed']) && root.child('rewards').child($rewardId).exists()",
+          "is_redeemed": {
+            ".validate": "newData.isBoolean()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "eventParticipants": {
+      "$eventId": {
+        "$uid": {
+          ".read": "auth != null && auth.token.email_verified == true && (auth.uid == $uid || root.child('admins').child(auth.uid).val() == true)",
+          ".write": "auth != null && auth.token.email_verified == true && auth.uid == $uid && !data.exists() && newData.val() == true && root.child('communityEvents').child($eventId).child('status').val() == 'approved'",
+          ".validate": "newData.isBoolean() && newData.val() == true"
+        }
+      }
+    },
+    "xpAwards": {
+      "$uid": {
+        ".read": "auth != null && auth.token.email_verified == true && (auth.uid == $uid || root.child('admins').child(auth.uid).val() == true)",
+        "$actionType": {
+          "$actionId": {
+            ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.uid).val() == true",
+            ".validate": "newData.hasChildren(['status', 'actionType', 'xpAmount', 'createdAt']) && (newData.child('status').val() == 'pending' || newData.child('status').val() == 'awarded') && newData.child('actionType').val() == $actionType && newData.child('xpAmount').isNumber() && newData.child('createdAt').isNumber()"
+          }
         }
       }
     },

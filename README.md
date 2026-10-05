@@ -103,7 +103,58 @@ Pentru inițializare:
 6. Deconectează-te și autentifică-te din nou. Catalogul celor 90 de locații este deja încărcat în Realtime Database; administratorul poate folosi butonul **Încarcă cele 90 de locații** din meniul **Cont** pentru a-l reîncărca, fără să înlocuiască ownerii existenți.
 7. Pornește backendul local cu `.\start.ps1` și accesează `http://localhost:5101/`.
 
-La autentificare, dacă profilul `users/{UID}` lipsește, aplicația îl creează din emailul și numele contului Firebase, fără să suprascrie profilele existente. Utilizatorul poate citi și actualiza numai profilul asociat propriului UID; validările bazei verifică emailul, username-ul și data creării, iar câmpurile suplimentare sunt respinse.
+La autentificare, dacă profilul `users/{UID}` lipsește, aplicația îl creează din emailul și numele contului Firebase, fără să suprascrie profilele existente. Utilizatorii existenți primesc automat valorile implicite de gamification la următoarea autentificare. XP-ul, nivelul și rangul nu pot fi modificate de utilizatorul obișnuit; doar administratorii îi pot actualiza prin Realtime Database. Utilizatorul poate citi și actualiza numai profilul asociat propriului UID; validările bazei verifică datele profilului și câmpurile gamification.
+
+### Schema de gamification în Realtime Database
+
+Realtime Database nu folosește tabele sau migrații SQL. Structura echivalentă este:
+
+```text
+users/{UID}
+  xp: 0
+  level: 1
+  rank_title: "FOMO Explorer"
+
+rewards/{rewardId}
+  title: string
+  description: string
+  required_level: integer
+  partner_name: string
+  promo_code: string
+
+user_rewards/{UID}/{rewardId}
+  is_redeemed: boolean
+
+eventParticipants/{eventId}/{UID}
+  true
+
+xpAwards/{UID}/{actionType}/{actionId}
+  status: "pending" | "awarded"
+  xpAmount: integer
+```
+
+Conturile noi primesc valorile implicite la înregistrare; conturile existente sunt completate automat la următoarea autentificare, fără să le fie suprascrise XP-ul sau nivelul existente. Catalogul `rewards` și atribuirea recompenselor în `user_rewards` sunt administrate prin Firebase Console sau alt canal de administrator. Utilizatorii autentificați și cu email confirmat pot citi numai recompensele atribuite lor; numai administratorii pot citi catalogul complet, crea/edita recompense, atribui recompense sau modifica starea de revendicare. Regulile din `database.rules.json` validează câmpurile și protejează XP/nivel/rang împotriva modificării din client; publică-le cu comanda de deploy de mai sus.
+
+Integrarea activităților folosește funcția backend `Add-XpToUser` și endpointul `POST /api/users/{UID}/xp`. Cererea conține `{"actionType":"event_created|event_joined|friend_connected","actionId":"..."}` și Firebase ID token al utilizatorului în header-ul de autorizare. Serverul verifică tokenul și UID-ul prin Firebase Authentication, validează acțiunea în Realtime Database și fixează punctajul server-side: 50 XP pentru propunerea de eveniment, 30 XP pentru participarea la un eveniment aprobat și 15 XP pentru acceptarea unei conexiuni de prietenie. `xpAwards/{UID}` face aceeași acțiune idempotentă, iar ETag protejează actualizările concurente ale profilului. La creșterea nivelului se actualizează rangul, iar recompensele eligibile sunt adăugate în `user_rewards/{UID}`.
+
+Pentru scrierile privilegiate, configurează numai în procesul backend:
+
+- `FIREBASE_WEB_API_KEY`: cheia Web publică din `firebase-config.js`, folosită pentru verificarea ID token-ului.
+- `FIREBASE_DATABASE_ADMIN_TOKEN`: OAuth 2.0 access token obținut server-side de la un service account autorizat pentru Firebase Realtime Database. Tokenul este secret și expiră; generează/reîmprospătează-l dintr-un shell securizat și nu îl pune în cod, în Git sau în clientul web.
+
+Exemplu PowerShell, în aceeași fereastră din care pornește backendul (obține access token-ul prin mecanismul service-account aprobat pentru mediul tău):
+
+```powershell
+$env:FIREBASE_WEB_API_KEY = "cheia Web publică din firebase-config.js"
+$env:FIREBASE_DATABASE_ADMIN_TOKEN = Read-Host "OAuth access token pentru service account"
+.\start.ps1
+```
+
+Fără aceste valori, endpointul întoarce `503` pentru acordarea XP; evenimentul, participarea sau conexiunea deja salvată rămâne validă, iar interfața raportează separat eroarea XP. Nu folosi tokenul unui utilizator ca token de administrator.
+
+Propunerile de evenimente trimit automat cererea XP după salvarea reușită. Evenimentele aprobate afișează **Participă · +30 XP**, care salvează participarea în `eventParticipants` și solicită XP. Acceptarea unei cereri de prietenie acordă 15 XP după salvarea ambelor înregistrări de prietenie.
+
+Profilul afișează componenta React `ProfileXPBar` cu progres XP, rang, nivel, recompense deblocate și cod promoțional ascuns până la apăsarea butonului. Componenta apare pentru conturile cu adresă de email confirmată și își reîncarcă automat datele după un XP award reușit.
 
 Pagina **Profil** afișează starea contului din Firebase Authentication; nu cere citirea profilului din Realtime Database doar pentru a afișa emailul autentificat.
 

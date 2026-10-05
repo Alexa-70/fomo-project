@@ -60,7 +60,33 @@ try {
     throw "Endpointul /health a întors un status neașteptat."
   }
 
-  foreach ($asset in @("app.js", "route-planner.js", "ride-sharing.js", "styles.css", "firebase-config.js", "firebase-client.js", "account-panel.js", "account-panel.css", "buttons-ui/buttons-ui.js", "buttons-ui/buttons-ui.css", "event-workflow.js", "locations.json", "database.rules.json")) {
+  $unauthorizedStatus = 0
+  try {
+    [void](Invoke-WebRequest -Method Post -Uri "$baseUrl/api/users/test-user/xp" -Body "{}" -ContentType "application/json" -UseBasicParsing -TimeoutSec 5)
+  }
+  catch {
+    if ($null -ne $_.Exception.Response) {
+      $unauthorizedStatus = [int]$_.Exception.Response.StatusCode
+    }
+  }
+  if ($unauthorizedStatus -ne 401) {
+    throw "XP award endpoint must reject requests without a Firebase ID token."
+  }
+
+  $invalidXpStatus = 0
+  try {
+    [void](Invoke-WebRequest -Method Post -Uri "$baseUrl/api/users/test-user/xp" -Headers @{ Authorization = "Bearer $([string]::new('A', 120))" } -Body '{"actionType":"invalid","actionId":"test"}' -ContentType "application/json" -UseBasicParsing -TimeoutSec 5)
+  }
+  catch {
+    if ($null -ne $_.Exception.Response) {
+      $invalidXpStatus = [int]$_.Exception.Response.StatusCode
+    }
+  }
+  if ($invalidXpStatus -ne 400) {
+    throw "XP award endpoint must reject unknown action types before calling Firebase."
+  }
+
+  foreach ($asset in @("app.js", "route-planner.js", "ride-sharing.js", "profile-xp-bar.js", "gamification.js", "styles.css", "firebase-config.js", "firebase-client.js", "account-panel.js", "account-panel.css", "buttons-ui/buttons-ui.js", "buttons-ui/buttons-ui.css", "event-workflow.js", "locations.json", "database.rules.json")) {
 
     $assetResponse = Invoke-WebRequest -Uri "$baseUrl/$asset" -UseBasicParsing -TimeoutSec 5
     if ($assetResponse.StatusCode -ne 200) {
@@ -80,9 +106,15 @@ try {
 
   $appScript = Get-Content -LiteralPath (Join-Path $projectRoot "app.js") -Raw -Encoding UTF8
   $routeScript = Get-Content -LiteralPath (Join-Path $projectRoot "route-planner.js") -Raw -Encoding UTF8
+  $serverScriptContent = Get-Content -LiteralPath $serverScript -Raw -Encoding UTF8
+  $xpComponentScript = Get-Content -LiteralPath (Join-Path $projectRoot "profile-xp-bar.js") -Raw -Encoding UTF8
+  $gamificationScript = Get-Content -LiteralPath (Join-Path $projectRoot "gamification.js") -Raw -Encoding UTF8
+  $workflowScript = Get-Content -LiteralPath (Join-Path $projectRoot "event-workflow.js") -Raw -Encoding UTF8
+  $friendsScript = Get-Content -LiteralPath (Join-Path $projectRoot "buttons-ui\buttons-ui.js") -Raw -Encoding UTF8
   $indexHtml = Get-Content -LiteralPath (Join-Path $projectRoot "index.html") -Raw -Encoding UTF8
   $styleSheet = Get-Content -LiteralPath (Join-Path $projectRoot "styles.css") -Raw -Encoding UTF8
   if ($appScript -notmatch "function getApiBaseUrl\(\)" -or
+    -not $appScript.Contains('fetch(`${window.location.origin}/health`') -or
     $appScript -notmatch 'window\.location\.protocol === "file:"' -or
     $appScript -notmatch 'window\.location\.port !== "5101"' -or
     $appScript -notmatch 'fetch\(apiUrl, options\)' -or
@@ -94,6 +126,36 @@ try {
     -not $routeScript.Contains("router.project-osrm.org/route/v1/driving/") -or
     -not $routeScript.Contains("context.isGitHubPages()")) {
     throw "GitHub Pages trebuie să poată geocoda plecarea și cere rute publice fără backend local."
+  }
+  foreach ($requiredGamificationFeature in @(
+    "function Add-XpToUser",
+    'user_rewards/$UserId',
+    "Social Scout",
+    "Party Starter",
+    "VIP Connector",
+    "FOMO Legend",
+    "FIREBASE_DATABASE_ADMIN_TOKEN",
+    "Get-VerifiedFirebaseUser",
+    'event_joined',
+    'id="profile-xp-bar"',
+    "from-violet-500",
+    "to-pink-400",
+    "promo_code",
+    'profile-xp-bar.js',
+    'gamification.js'
+  )) {
+    $source = if ($requiredGamificationFeature -eq 'id="profile-xp-bar"' -or $requiredGamificationFeature -in @("profile-xp-bar.js", "gamification.js")) { $indexHtml } elseif ($requiredGamificationFeature -in @("Social Scout", "Party Starter", "VIP Connector", "FOMO Legend", "function Add-XpToUser", 'user_rewards/$UserId', "FIREBASE_DATABASE_ADMIN_TOKEN", "Get-VerifiedFirebaseUser", 'event_joined')) { $serverScriptContent } else { $xpComponentScript }
+    if (-not $source.Contains($requiredGamificationFeature)) {
+      throw "Gamification implementation is missing '$requiredGamificationFeature'."
+    }
+  }
+  if (-not $workflowScript.Contains('awardXp("event_created"') -or
+    -not $workflowScript.Contains("createdEvent.key") -or
+    -not $friendsScript.Contains('awardXp("friend_connected"') -or
+    -not $appScript.Contains('awardXp("event_joined"') -or
+    -not $appScript.Contains("eventParticipants/") -or
+    -not $gamificationScript.Contains("Authorization:")) {
+    throw "XP rewards must be connected to verified event creation, participation, friendship, and authenticated API calls."
   }
   $assistantScript = Get-Content -LiteralPath (Join-Path $projectRoot "ai-assistant.js") -Raw -Encoding UTF8
   if (-not $assistantScript.Contains('window.FomoRouteContext.apiRequest("/api/assistant"')) {
@@ -162,6 +224,33 @@ try {
     $null -eq $ownerRequestRule.'$uid'.'$locationId'.userId -or
     $null -eq $ownerRequestRule.'$uid'.'$locationId'.reviewedAt) {
     throw "Regulile cererilor de owner nu permit schema validă sau permit câmpuri nevalidate."
+  }
+
+  $userRules = $databaseRules.rules.users.'$uid'
+  $rewardRules = $databaseRules.rules.rewards
+  $userRewardRules = $databaseRules.rules.user_rewards.'$uid'.'$rewardId'
+  $rewardReadRule = $rewardRules.'$rewardId'.'.read'
+  $participantRules = $databaseRules.rules.eventParticipants.'$eventId'.'$uid'
+  $firebaseClient = Get-Content -LiteralPath (Join-Path $projectRoot "firebase-client.js") -Raw -Encoding UTF8
+  $signupScripts = @(
+    (Get-Content -LiteralPath (Join-Path $projectRoot "account-panel.js") -Raw -Encoding UTF8),
+    (Get-Content -LiteralPath (Join-Path $projectRoot "buttons-ui\buttons-ui.js") -Raw -Encoding UTF8)
+  )
+  if (-not $userRules.'.validate'.Contains("'xp', 'level', 'rank_title'") -or
+    -not $userRules.'.write'.Contains("data.child('xp').val()") -or
+    $userRules.'$other'.'.validate' -ne $false -or
+    -not $rewardRules.'$rewardId'.'.validate'.Contains("'required_level'") -or
+    -not $rewardRules.'.read'.Contains("root.child('admins')") -or
+    -not $rewardReadRule.Contains('root.child(''user_rewards'').child(auth.uid).child($rewardId).exists()') -or
+    -not $userRewardRules.'.validate'.Contains("root.child('rewards')") -or
+    -not $userRewardRules.'.write'.Contains("root.child('admins')") -or
+    -not $participantRules.'.write'.Contains("auth.uid == $uid") -or
+    -not $participantRules.'.write'.Contains("root.child('communityEvents')") -or
+    -not $participantRules.'.write'.Contains("status').val() == 'approved'") -or
+    -not $firebaseClient.Contains('rank_title: "FOMO Explorer"') -or
+    -not $firebaseClient.Contains("profileRef.transaction") -or
+    @($signupScripts | Where-Object { -not $_.Contains('rank_title: "FOMO Explorer"') }).Count -gt 0) {
+    throw "Regulile sau profilurile Firebase nu includ schema gamification și migrarea sigură a profilurilor existente."
   }
 
   $usernameIndexRules = $databaseRules.rules.usernameIndex

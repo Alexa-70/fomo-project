@@ -11,6 +11,8 @@ $script:lastGeocodeRequest = [DateTimeOffset]::MinValue
 $script:eventsFile = Join-Path $PSScriptRoot "events.json"
 $script:votesFile = Join-Path $PSScriptRoot "votes.json"
 $script:realtimeDatabaseUrl = "https://fomo-68a85-default-rtdb.firebaseio.com"
+$script:firebaseWebApiKey = $env:FIREBASE_WEB_API_KEY
+$script:firebaseDatabaseAdminToken = $env:FIREBASE_DATABASE_ADMIN_TOKEN
 
 function Get-PublicAssistantCatalog {
   $locationsResponse = Invoke-RestMethod `
@@ -125,6 +127,286 @@ function Write-JsonResponse {
   $Context.Response.Close()
 }
 
+function Invoke-FirebaseRestRequest {
+  param(
+    [Parameter(Mandatory = $true)][ValidateSet("GET", "PUT", "PATCH")][string]$Method,
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$AccessToken,
+    [object]$Body,
+    [string]$IfMatch
+  )
+
+  $uri = "$($script:realtimeDatabaseUrl)/$Path.json"
+  $headers = @{
+    Authorization = "Bearer $AccessToken"
+    "X-Firebase-ETag" = "true"
+  }
+  if (-not [string]::IsNullOrWhiteSpace($IfMatch)) {
+    $headers["if-match"] = $IfMatch
+  }
+  $parameters = @{
+    Uri = $uri
+    Method = $Method
+    Headers = $headers
+    TimeoutSec = 15
+    UseBasicParsing = $true
+    ErrorAction = "Stop"
+  }
+  if ($null -ne $Body) {
+    $parameters["ContentType"] = "application/json"
+    $parameters["Body"] = ConvertTo-Json -InputObject $Body -Depth 8 -Compress
+  }
+
+  try {
+    $response = Invoke-WebRequest @parameters
+  }
+  catch {
+    $statusCode = 0
+    if ($null -ne $_.Exception.Response) {
+      $statusCode = [int]$_.Exception.Response.StatusCode
+    }
+    throw [System.InvalidOperationException]::new("Firebase REST request failed with HTTP $statusCode.")
+  }
+
+  $value = $null
+  if (-not [string]::IsNullOrWhiteSpace($response.Content) -and $response.Content -ne "null") {
+    $value = ConvertFrom-Json -InputObject $response.Content
+  }
+  return @{
+    Value = $value
+    ETag = [string]$response.Headers["ETag"]
+  }
+}
+
+function Get-VerifiedFirebaseUser {
+  param(
+    [Parameter(Mandatory = $true)][string]$IdToken
+  )
+
+  if ([string]::IsNullOrWhiteSpace($script:firebaseWebApiKey)) {
+    throw [System.InvalidOperationException]::new("FIREBASE_WEB_API_KEY is not configured on the server.")
+  }
+  try {
+    $lookupUri = "https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=$([Uri]::EscapeDataString($script:firebaseWebApiKey))"
+    $lookup = Invoke-RestMethod `
+      -Method Post `
+      -Uri $lookupUri `
+      -ContentType "application/json" `
+      -Body (ConvertTo-Json -InputObject @{ idToken = $IdToken } -Compress) `
+      -TimeoutSec 15
+  }
+  catch {
+    throw [System.UnauthorizedAccessException]::new("Firebase ID token verification failed.")
+  }
+  if ($null -eq $lookup.users -or $lookup.users.Count -ne 1 -or -not $lookup.users[0].emailVerified) {
+    throw [System.UnauthorizedAccessException]::new("A verified Firebase account is required.")
+  }
+  return [string]$lookup.users[0].localId
+}
+
+function Add-XpToUser {
+  param(
+    [Parameter(Mandatory = $true)][string]$UserId,
+    [Parameter(Mandatory = $true)][ValidateSet("event_created", "event_joined", "friend_connected")][string]$ActionType,
+    [Parameter(Mandatory = $true)][string]$ActionId
+  )
+
+  if ($UserId -notmatch "^[A-Za-z0-9_-]{1,128}$") {
+    throw [System.ArgumentException]::new("userId has an invalid format.")
+  }
+  if ($ActionId -notmatch "^[A-Za-z0-9_-]{1,128}$") {
+    throw [System.ArgumentException]::new("actionId has an invalid format.")
+  }
+  if ([string]::IsNullOrWhiteSpace($script:firebaseDatabaseAdminToken)) {
+    throw [System.InvalidOperationException]::new("FIREBASE_DATABASE_ADMIN_TOKEN is not configured on the server.")
+  }
+  $xpAmount = switch ($ActionType) {
+    "event_created" { 50 }
+    "event_joined" { 30 }
+    "friend_connected" { 15 }
+  }
+
+  $actionIsValid = $false
+  switch ($ActionType) {
+    "event_created" {
+      $action = Invoke-FirebaseRestRequest -Method "GET" -Path "communityEvents/$ActionId" -AccessToken $script:firebaseDatabaseAdminToken
+      $actionIsValid = $null -ne $action.Value -and [string]$action.Value.submittedBy -eq $UserId
+    }
+    "event_joined" {
+      $action = Invoke-FirebaseRestRequest -Method "GET" -Path "communityEvents/$ActionId" -AccessToken $script:firebaseDatabaseAdminToken
+      $participant = Invoke-FirebaseRestRequest -Method "GET" -Path "eventParticipants/$ActionId/$UserId" -AccessToken $script:firebaseDatabaseAdminToken
+      $actionIsValid = $null -ne $action.Value -and [string]$action.Value.status -eq "approved" -and $participant.Value -eq $true
+    }
+    "friend_connected" {
+      $friend = Invoke-FirebaseRestRequest -Method "GET" -Path "friends/$UserId/$ActionId" -AccessToken $script:firebaseDatabaseAdminToken
+      $reciprocalFriend = Invoke-FirebaseRestRequest -Method "GET" -Path "friends/$ActionId/$UserId" -AccessToken $script:firebaseDatabaseAdminToken
+      $actionIsValid = $null -ne $friend.Value -and $null -ne $reciprocalFriend.Value
+    }
+  }
+  if (-not $actionIsValid) {
+    throw [System.UnauthorizedAccessException]::new("The requested XP action could not be verified.")
+  }
+
+  $awardPath = "xpAwards/$UserId/$ActionType/$ActionId"
+  $awardResponse = Invoke-FirebaseRestRequest -Method "GET" -Path $awardPath -AccessToken $script:firebaseDatabaseAdminToken
+  if ($null -ne $awardResponse.Value) {
+    if ([string]$awardResponse.Value.status -eq "awarded") {
+      return @{
+        userId = $UserId
+        xp = [int]$awardResponse.Value.xp
+        level = [int]$awardResponse.Value.level
+        rank_title = [string]$awardResponse.Value.rank_title
+        unlockedRewardIds = @()
+        alreadyAwarded = $true
+      }
+    }
+    throw [System.InvalidOperationException]::new("This XP award is already being processed.")
+  }
+  if ([string]::IsNullOrWhiteSpace($awardResponse.ETag)) {
+    throw [System.InvalidOperationException]::new("Firebase did not provide the ETag required for a safe XP award.")
+  }
+  $pendingAward = @{
+    status = "pending"
+    actionType = $ActionType
+    xpAmount = $xpAmount
+    createdAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+  }
+  try {
+    [void](Invoke-FirebaseRestRequest -Method "PUT" -Path $awardPath -AccessToken $script:firebaseDatabaseAdminToken -Body $pendingAward -IfMatch $awardResponse.ETag)
+  }
+  catch {
+    if ($_.Exception.Message.Contains("HTTP 412")) {
+      throw [System.InvalidOperationException]::new("This XP award is already being processed.")
+    }
+    throw
+  }
+
+  $userPath = "users/$UserId"
+  $userProfile = $null
+  $savedProfile = $null
+  for ($attempt = 0; $attempt -lt 5; $attempt++) {
+    $profileResponse = Invoke-FirebaseRestRequest -Method "GET" -Path $userPath -AccessToken $script:firebaseDatabaseAdminToken
+    $userProfile = $profileResponse.Value
+    if ($null -eq $userProfile) {
+      throw [System.InvalidOperationException]::new("Firebase user profile was not found.")
+    }
+    if ([string]::IsNullOrWhiteSpace($profileResponse.ETag)) {
+      throw [System.InvalidOperationException]::new("Firebase did not provide the ETag required for a safe XP update.")
+    }
+
+    $currentXp = if ($null -eq $userProfile.xp) { 0 } else { [int]$userProfile.xp }
+    $currentLevel = if ($null -eq $userProfile.level) { 1 } else { [int]$userProfile.level }
+    $newXp = $currentXp + $xpAmount
+    if ($newXp -le 100) {
+      $newLevel = 1
+      $rankTitle = "FOMO Explorer"
+    }
+    elseif ($newXp -le 300) {
+      $newLevel = 2
+      $rankTitle = "Social Scout"
+    }
+    elseif ($newXp -le 700) {
+      $newLevel = 3
+      $rankTitle = "Party Starter"
+    }
+    elseif ($newXp -lt 1500) {
+      $newLevel = 4
+      $rankTitle = "VIP Connector"
+    }
+    else {
+      $newLevel = 5
+      $rankTitle = "FOMO Legend"
+    }
+
+    $updatedProfile = @{}
+    foreach ($property in $userProfile.PSObject.Properties) {
+      $updatedProfile[$property.Name] = $property.Value
+    }
+    $updatedProfile["xp"] = $newXp
+    $updatedProfile["level"] = $newLevel
+    $updatedProfile["rank_title"] = $rankTitle
+
+    try {
+      [void](Invoke-FirebaseRestRequest `
+        -Method "PUT" `
+        -Path $userPath `
+        -AccessToken $script:firebaseDatabaseAdminToken `
+        -Body $updatedProfile `
+        -IfMatch $profileResponse.ETag)
+      $savedProfile = $updatedProfile
+      break
+    }
+    catch {
+      if (-not $_.Exception.Message.Contains("HTTP 412") -or $attempt -eq 4) {
+        throw
+      }
+    }
+  }
+
+  if ($null -eq $savedProfile) {
+    throw [System.InvalidOperationException]::new("The user XP update could not be committed after concurrent changes.")
+  }
+
+  $unlockedRewardIds = @()
+  if ($newLevel -gt $currentLevel) {
+    $rewardsResponse = Invoke-FirebaseRestRequest -Method "GET" -Path "rewards" -AccessToken $script:firebaseDatabaseAdminToken
+    $assignedResponse = Invoke-FirebaseRestRequest -Method "GET" -Path "user_rewards/$UserId" -AccessToken $script:firebaseDatabaseAdminToken
+    $rewardAssignments = @{}
+    if ($null -ne $assignedResponse.Value) {
+      foreach ($property in $assignedResponse.Value.PSObject.Properties) {
+        $rewardAssignments[$property.Name] = $property.Value
+      }
+    }
+
+    if ($null -ne $rewardsResponse.Value) {
+      foreach ($rewardProperty in $rewardsResponse.Value.PSObject.Properties) {
+        $reward = $rewardProperty.Value
+        if (
+          $null -eq $reward -or
+          $null -eq $reward.required_level -or
+          [int]$reward.required_level -gt $newLevel -or
+          $rewardAssignments.ContainsKey($rewardProperty.Name)
+        ) {
+          continue
+        }
+        if ($rewardProperty.Name -match '[.#$\[\]/]') {
+          throw [System.InvalidOperationException]::new("A reward has an invalid Realtime Database key.")
+        }
+        $rewardAssignments[$rewardProperty.Name] = @{ is_redeemed = $false }
+        $unlockedRewardIds += $rewardProperty.Name
+      }
+    }
+
+    if ($unlockedRewardIds.Count -gt 0) {
+      $newAssignments = @{}
+      foreach ($rewardId in $unlockedRewardIds) {
+        $newAssignments[$rewardId] = $rewardAssignments[$rewardId]
+      }
+      [void](Invoke-FirebaseRestRequest -Method "PATCH" -Path "user_rewards/$UserId" -AccessToken $script:firebaseDatabaseAdminToken -Body $newAssignments)
+    }
+  }
+
+  $completedAward = @{
+    status = "awarded"
+    actionType = $ActionType
+    xpAmount = $xpAmount
+    xp = $newXp
+    level = $newLevel
+    rank_title = $rankTitle
+    createdAt = $pendingAward.createdAt
+  }
+  [void](Invoke-FirebaseRestRequest -Method "PUT" -Path $awardPath -AccessToken $script:firebaseDatabaseAdminToken -Body $completedAward)
+
+  return @{
+    userId = $UserId
+    xp = $newXp
+    level = $newLevel
+    rank_title = $rankTitle
+    unlockedRewardIds = $unlockedRewardIds
+    alreadyAwarded = $false
+  }
+}
+
 function Get-Coordinate {
   param(
     [object]$Point,
@@ -165,7 +447,7 @@ function Invoke-MapRequest {
   $response = $Context.Response
   $response.Headers["Access-Control-Allow-Origin"] = "*"
   $response.Headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-  $response.Headers["Access-Control-Allow-Headers"] = "Content-Type"
+  $response.Headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
 
   if ($request.HttpMethod -eq "OPTIONS") {
     $response.StatusCode = 204
@@ -208,6 +490,71 @@ function Invoke-MapRequest {
 
   if ($path -eq "/health" -and $request.HttpMethod -eq "GET") {
     Write-JsonResponse -Context $Context -StatusCode 200 -Body @{ status = "ok" }
+    return
+  }
+
+  if ($path -match "^/api/users/([A-Za-z0-9_-]{1,128})/xp$") {
+    $targetUserId = $Matches[1]
+    if ($request.HttpMethod -ne "POST") {
+      Write-JsonResponse -Context $Context -StatusCode 405 -Body @{ error = "Use POST to award XP." }
+      return
+    }
+    if ($request.ContentLength64 -gt 4096) {
+      Write-JsonResponse -Context $Context -StatusCode 413 -Body @{ error = "XP request is too large." }
+      return
+    }
+    $authorization = [string]$request.Headers["Authorization"]
+    if ($authorization -notmatch "^Bearer ([A-Za-z0-9._-]{100,8192})$") {
+      Write-JsonResponse -Context $Context -StatusCode 401 -Body @{ error = "A Firebase ID token is required." }
+      return
+    }
+    $firebaseIdToken = $Matches[1]
+
+    try {
+      $reader = [System.IO.StreamReader]::new($request.InputStream, $request.ContentEncoding)
+      try {
+        $xpBody = $reader.ReadToEnd() | ConvertFrom-Json
+      }
+      finally {
+        $reader.Dispose()
+      }
+      $actionType = [string]$xpBody.actionType
+      $actionId = [string]$xpBody.actionId
+      if ($actionType -notin @("event_created", "event_joined", "friend_connected")) {
+        throw [System.ArgumentException]::new("actionType must be event_created, event_joined, or friend_connected.")
+      }
+      if ($actionId -notmatch "^[A-Za-z0-9_-]{1,128}$") {
+        throw [System.ArgumentException]::new("actionId has an invalid format.")
+      }
+      if ([string]::IsNullOrWhiteSpace($script:firebaseDatabaseAdminToken) -or [string]::IsNullOrWhiteSpace($script:firebaseWebApiKey)) {
+        Write-JsonResponse -Context $Context -StatusCode 503 -Body @{ error = "Firebase XP awards are not configured on the server." }
+        return
+      }
+
+      $authenticatedUserId = Get-VerifiedFirebaseUser -IdToken $firebaseIdToken
+      if ($authenticatedUserId -ne $targetUserId) {
+        Write-JsonResponse -Context $Context -StatusCode 403 -Body @{ error = "XP can only be awarded to the authenticated user." }
+        return
+      }
+      $result = Add-XpToUser -UserId $targetUserId -ActionType $actionType -ActionId $actionId
+      Write-JsonResponse -Context $Context -StatusCode 200 -Body $result
+    }
+    catch [System.ArgumentException] {
+      Write-JsonResponse -Context $Context -StatusCode 400 -Body @{ error = $_.Exception.Message }
+    }
+    catch [System.UnauthorizedAccessException] {
+      $statusCode = if ($_.Exception.Message -like "*could not be verified*") { 403 } else { 401 }
+      Write-JsonResponse -Context $Context -StatusCode $statusCode -Body @{ error = $_.Exception.Message }
+    }
+    catch [System.InvalidOperationException] {
+      $statusCode = if ($_.Exception.Message.Contains("not configured")) { 503 } elseif ($_.Exception.Message.Contains("HTTP 401")) { 401 } elseif ($_.Exception.Message.Contains("HTTP 403")) { 403 } elseif ($_.Exception.Message.Contains("not found")) { 404 } elseif ($_.Exception.Message.Contains("already being processed")) { 409 } else { 502 }
+      [Console]::Error.WriteLine("XP award request failed: " + $_.Exception.Message)
+      Write-JsonResponse -Context $Context -StatusCode $statusCode -Body @{ error = $_.Exception.Message }
+    }
+    catch {
+      [Console]::Error.WriteLine("XP award request failed: " + $_.Exception.Message)
+      Write-JsonResponse -Context $Context -StatusCode 500 -Body @{ error = "XP could not be awarded." }
+    }
     return
   }
 

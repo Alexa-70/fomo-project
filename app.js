@@ -13,6 +13,7 @@ function getApiBaseUrl() {
 }
 
 const API_BASE_URL = getApiBaseUrl();
+let resolvedApiBaseUrl;
 
 const originInput = document.querySelector("#origin");
 const originSuggestions = document.querySelector("#origin-suggestions");
@@ -156,13 +157,30 @@ function formatDuration(seconds) {
 }
 
 async function apiRequest(path, options = {}) {
-  const apiUrl = `${API_BASE_URL}${path}`;
+  if (resolvedApiBaseUrl === undefined) {
+    resolvedApiBaseUrl = API_BASE_URL;
+    const localHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+    if (
+      API_BASE_URL &&
+      window.location.protocol !== "file:" &&
+      localHosts.has(window.location.hostname)
+    ) {
+      try {
+        const response = await fetch(`${window.location.origin}/health`, { cache: "no-store" });
+        const health = response.ok ? await response.json() : null;
+        if (health && health.status === "ok") resolvedApiBaseUrl = "";
+      } catch {
+        resolvedApiBaseUrl = API_BASE_URL;
+      }
+    }
+  }
+  const apiUrl = `${resolvedApiBaseUrl}${path}`;
   let response;
   try {
     response = await fetch(apiUrl, options);
   } catch (error) {
     if (error instanceof TypeError) {
-      const backendUrl = API_BASE_URL || window.location.origin;
+      const backendUrl = resolvedApiBaseUrl || window.location.origin;
       throw new Error(`Nu mă pot conecta la backendul FOMO (${backendUrl}). Pornește backendul cu .\\start.ps1 și reîncarcă pagina.`);
     }
     throw error;
@@ -189,6 +207,46 @@ function formatEventDate(value) {
 }
 
 /* ==================== MARKERE ==================== */
+function createEventParticipationButton(event) {
+  if (event.source !== "community" || !event.firebaseEventId) return null;
+
+  const button = createElement("button", "event-join-button", "Participă · +30 XP");
+  button.type = "button";
+  button.addEventListener("click", async (clickEvent) => {
+    clickEvent.stopPropagation();
+    const user = window.FomoFirebase && window.FomoFirebase.user();
+    if (!user || !user.emailVerified) {
+      setStatus("Autentifică-te și confirmă emailul ca să te alături evenimentului.", "error");
+      return;
+    }
+    button.disabled = true;
+    try {
+      const participantRef = window.FomoFirebase.db.ref(`eventParticipants/${event.firebaseEventId}/${user.uid}`);
+      const existingParticipation = await participantRef.once("value");
+      if (!existingParticipation.exists()) await participantRef.set(true);
+
+      try {
+        const result = await window.FomoGamification.awardXp("event_joined", event.firebaseEventId);
+        button.textContent = "Participi · +30 XP";
+        button.disabled = true;
+        setStatus(
+          result.xpAwarded ? "Te-ai alăturat evenimentului și ai primit 30 XP." : "Participarea ta era deja înregistrată.",
+          "success",
+        );
+      } catch (xpError) {
+        button.disabled = false;
+        button.textContent = "Reîncearcă XP · +30";
+        console.error("Event participation succeeded, but XP could not be awarded.", xpError);
+        setStatus(`Participarea a fost salvată, dar XP nu a putut fi acordat: ${xpError.message}`, "error");
+      }
+    } catch (error) {
+      button.disabled = false;
+      setStatus(`Nu te-ai putut alătura evenimentului: ${error.message}`, "error");
+    }
+  });
+  return button;
+}
+
 function createEventMarker(event) {
   const markerIcon = L.divIcon({
     className: "",
@@ -205,6 +263,8 @@ function createEventMarker(event) {
   if (event.description) {
     popup.append(createElement("span", "map-popup-description", event.description));
   }
+  const participationButton = createEventParticipationButton(event);
+  if (participationButton) popup.append(participationButton);
   popup.append(createElement("span", "popup-action", "Vezi evenimentul →"));
   marker.bindPopup(popup);
   marker.on("click", () => selectEvent(event.id, false));
@@ -437,6 +497,8 @@ function createEventCard(event) {
   const rideActions = window.FomoRideSharing.createActions(event);
   rideActions.addEventListener("click", (clickEvent) => clickEvent.stopPropagation());
   if (event.source !== "community") actions.append(voteButton);
+  const participationButton = createEventParticipationButton(event);
+  if (participationButton) actions.append(participationButton);
   actions.append(routeButton, transitButton, rideActions);
   card.append(heading, title, description, details, actions);
   card.addEventListener("click", () => selectEvent(event.id, true));

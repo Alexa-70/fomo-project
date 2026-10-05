@@ -336,6 +336,9 @@
         email,
         username,
         createdAt: firebase.database.ServerValue.TIMESTAMP,
+        xp: 0,
+        level: 1,
+        rank_title: "FOMO Explorer",
       });
       await api.db.ref(`publicProfiles/${credential.user.uid}`).set({
         username,
