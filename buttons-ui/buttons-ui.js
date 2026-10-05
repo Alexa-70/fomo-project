@@ -50,6 +50,7 @@
   let friendUser = null;
   let friendPublicProfile = null;
   let friendRecords = {};
+  let friendRecordsLoaded = false;
   let incomingFriendRequests = {};
   let friendSubscriptions = [];
   let friendSubscriptionUid = null;
@@ -142,6 +143,15 @@
   }
 
   function renderFriends() {
+    if (friendUser && !friendRecordsLoaded) {
+      friendsCount.textContent = "…";
+      friendsCountBadge.hidden = false;
+      friendsCountBadge.textContent = "…";
+      friendsButton.setAttribute("aria-label", "Friends, se încarcă");
+      friendsList.replaceChildren(createFriendsEmpty("Se încarcă lista de prieteni…"));
+      return;
+    }
+
     const friends = Object.entries(friendRecords);
     friendsCount.textContent = String(friends.length);
     friendsCountBadge.hidden = !friendUser;
@@ -300,6 +310,7 @@
     friendUser = null;
     friendPublicProfile = null;
     friendRecords = {};
+    friendRecordsLoaded = false;
     incomingFriendRequests = {};
     friendsCountBadge.hidden = true;
     friendsCountBadge.textContent = "";
@@ -364,6 +375,7 @@
     clearFriendSubscriptions();
     friendUser = user;
     friendSubscriptionUid = user.uid;
+    renderFriends();
     friendsStatus.textContent = "";
     try {
       await user.reload();
@@ -382,10 +394,13 @@
       const friendsListener = friendsRef.on("value", (snapshot) => {
         if (friendSubscriptionUid !== user.uid) return;
         friendRecords = snapshot.val() || {};
+        friendRecordsLoaded = true;
         renderFriends();
         renderFriendRequests();
       }, (error) => {
         if (friendSubscriptionUid !== user.uid) return;
+        friendRecordsLoaded = false;
+        renderFriends();
         console.error("Could not load the friends list.", error);
         friendsStatus.textContent = `Nu am putut încărca lista de prieteni: ${error.message}`;
       });
@@ -409,6 +424,8 @@
       friendSubscriptionUid = null;
       friendUser = user;
       friendPublicProfile = null;
+      friendRecordsLoaded = false;
+      renderFriends();
       console.error("Could not prepare the friends account.", error);
       friendsStatus.textContent = `Nu am putut încărca prietenii: ${error.message}`;
     }
@@ -610,6 +627,18 @@
   }
 
   homeButton.addEventListener("click", () => setNavigationView("home"));
+  window.addEventListener("fomo-view-event", (event) => {
+    const eventId = event.detail?.eventId;
+    if (typeof eventId !== "string") return;
+    setNavigationView("features");
+    document.querySelector('.panel-tabs .tab-button[data-tab="home"]')?.click();
+    window.FomoSearch.select(eventId);
+    window.requestAnimationFrame(() => {
+      const card = [...document.querySelectorAll("#event-list .event-card")]
+        .find((item) => item.dataset.eventId === eventId);
+      card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  });
   featuresButton.addEventListener("click", () => {
     setNavigationView(floatingPanel.classList.contains("is-open") ? "home" : "features");
   });
@@ -736,11 +765,22 @@
     const filterButton = event.target.closest(".search-filter");
     if (!filterButton) return;
     activeSearchCategory = filterButton.dataset.category;
+    window.FomoSetEventFilters?.({ category: activeSearchCategory });
     searchFilters.querySelectorAll(".search-filter").forEach((button) => {
       const isActive = button === filterButton;
       button.classList.toggle("active", isActive);
       button.setAttribute("aria-pressed", String(isActive));
     });
+    renderSearchResults();
+  });
+  const eventSortSelect = document.querySelector("#event-sort-select");
+  const venueTypeSelect = document.querySelector("#venue-type-select");
+  eventSortSelect?.addEventListener("change", () => {
+    window.FomoSetEventFilters?.({ sort: eventSortSelect.value });
+    renderSearchResults();
+  });
+  venueTypeSelect?.addEventListener("change", () => {
+    window.FomoSetEventFilters?.({ venueType: venueTypeSelect.value });
     renderSearchResults();
   });
   profileButton.addEventListener("click", () => {

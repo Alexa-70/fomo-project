@@ -35,41 +35,10 @@ const map = L.map("map", {
 })
   .setView([DEFAULT_ORIGIN.latitude, DEFAULT_ORIGIN.longitude], 13);
 
-if (typeof L.maplibreGL === "function") {
-  const baseMapLayer = L.maplibreGL({
-    style: "https://tiles.openfreemap.org/styles/bright",
-    attribution: '&copy; OpenStreetMap contributors &copy; OpenFreeMap',
-  }).addTo(map);
-  const vectorMap = baseMapLayer.getMaplibreMap();
-
-  function applyFomoMapTheme() {
-    if (!vectorMap.isStyleLoaded()) return;
-
-    const layerColors = {
-      background: ["background-color", "#fffdfa"],
-      park: ["fill-color", "#f5d5b8"],
-      "landcover-grass-park": ["fill-color", "#f9e7d7"],
-      "landcover-grass": ["fill-color", "#e9eadf"],
-      "landcover-wood": ["fill-color", "#dfe7d8"],
-      water: ["fill-color", "#c8dce8"],
-    };
-
-    for (const [layerId, [property, color]] of Object.entries(layerColors)) {
-      if (vectorMap.getLayer(layerId)) {
-        vectorMap.setPaintProperty(layerId, property, color);
-      }
-    }
-  }
-
-  vectorMap.on("style.load", () => requestAnimationFrame(applyFomoMapTheme));
-  vectorMap.on("load", applyFomoMapTheme);
-  if (vectorMap.isStyleLoaded()) applyFomoMapTheme();
-} else {
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
-  }).addTo(map);
-}
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom: 19,
+}).addTo(map);
 
 // 🔥 FIX CRUCIAL: forțează Leaflet să calculeze dimensiunea corect
 setTimeout(() => map.invalidateSize(), 100);
@@ -97,6 +66,9 @@ recenterButton.addEventListener("click", () => {
 /* ==================== STARE GLOBALĂ ==================== */
 let origin = { ...DEFAULT_ORIGIN };
 let events = [];
+let eventFilters = { category: "all", venueType: "all", sort: "popular" };
+let showPromotedEvents = true;
+let mapLocationsById = new Map();
 let selectedEventId = null;
 let routeLayer = null;
 let originMarker = null;
@@ -206,51 +178,160 @@ function formatEventDate(value) {
   }).format(date);
 }
 
-/* ==================== MARKERE ==================== */
-function createEventParticipationButton(event) {
-  if (event.source !== "community" || !event.firebaseEventId) return null;
+function formatEventTimeRange(event) {
+  const startsAt = new Date(event.startsAt);
+  const endsAt = new Date(event.endsAt || new Date(startsAt.getTime() + 2 * 60 * 60 * 1000));
+  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) return "Oră nespecificată";
+  const today = new Date();
+  const isToday = startsAt.getFullYear() === today.getFullYear() &&
+    startsAt.getMonth() === today.getMonth() &&
+    startsAt.getDate() === today.getDate();
+  const day = isToday
+    ? "Astăzi"
+    : new Intl.DateTimeFormat("ro-RO", { weekday: "long", day: "numeric", month: "long" }).format(startsAt);
+  const timeOptions = { hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+  const startTime = new Intl.DateTimeFormat("ro-RO", timeOptions).format(startsAt);
+  const endTime = new Intl.DateTimeFormat("ro-RO", timeOptions).format(endsAt);
+  return `${day} · ${startTime}–${endTime}`;
+}
 
-  const button = createElement("button", "event-join-button", "Participă · +30 XP");
+function eventHasEnded(event, now = Date.now()) {
+  const endsAt = new Date(event.endsAt || "");
+  if (Number.isFinite(endsAt.getTime())) return endsAt.getTime() <= now;
+  const startsAt = new Date(event.startsAt || "");
+  return Number.isFinite(startsAt.getTime()) &&
+    startsAt.getTime() + 2 * 60 * 60 * 1000 <= now;
+}
+
+function formatTicketPrice(event) {
+  if (!Number.isSafeInteger(event.ticketPriceCents)) return "Preț nespecificat";
+  return event.ticketPriceCents === 0
+    ? "Intrare gratuită"
+    : `${(event.ticketPriceCents / 100).toFixed(2)} RON`;
+}
+
+function createTicketLink(event) {
+  if (typeof event.ticketUrl !== "string") return null;
+  try {
+    const url = new URL(event.ticketUrl);
+    if (url.protocol !== "https:") return null;
+    const link = createElement("a", "event-ticket-link", "Cumpără bilet ↗");
+    link.href = url.href;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    return link;
+  } catch (error) {
+    console.error("Ignoring invalid event ticket URL.", error);
+    return null;
+  }
+}
+
+function eventCategoryLabel(category) {
+  return ({
+    socializing: "Socializare",
+    workshops: "Ateliere",
+    charity: "Caritate",
+    exhibitions: "Expoziții și artă",
+    sports: "Sport",
+    healthcare: "Sănătate și wellbeing",
+    entertainment: "Muzică și divertisment",
+  })[category] || category;
+}
+
+function attendanceCountLabel(event) {
+  if (event.attendanceError) return "—";
+  if (event.attendanceLoaded !== true || !Number.isSafeInteger(event.attendeesCount)) return "…";
+  return String(event.attendeesCount);
+}
+
+function createAttendanceButton(event) {
+  const count = attendanceCountLabel(event);
+  const countUnavailable = count === "…" || count === "—";
+  const button = createElement(
+    "button",
+    `event-attendance-button${event.goingByMe ? " attending" : ""}${countUnavailable ? " attendance-loading" : ""}`,
+    `${event.goingByMe ? "Merg" : "Voi merge"} · ${count}${event.source === "community" && event.status === "approved" && !event.goingByMe ? " · +30 XP" : ""}`,
+  );
   button.type = "button";
+  button.disabled = countUnavailable;
+  button.title = count === "…"
+    ? "Se încarcă numărul real de participanți."
+    : count === "—"
+      ? `Numărul real de participanți nu este disponibil${event.attendanceError ? `: ${event.attendanceError}` : "."}`
+      : `${count} persoane au confirmat participarea.`;
+  button.setAttribute("aria-pressed", String(Boolean(event.goingByMe)));
+  button.setAttribute("aria-label", countUnavailable
+    ? `Voi merge; numărul real de participanți ${count === "…" ? "se încarcă" : "nu este disponibil"}`
+    : `${event.goingByMe ? "Merg" : "Voi merge"}; ${count} persoane au confirmat`);
+  if (countUnavailable) return button;
   button.addEventListener("click", async (clickEvent) => {
     clickEvent.stopPropagation();
-    const user = window.FomoFirebase && window.FomoFirebase.user();
-    if (!user || !user.emailVerified) {
-      setStatus("Autentifică-te și confirmă emailul ca să te alături evenimentului.", "error");
+    const api = window.FomoFirebase;
+    const user = api?.user();
+    if (!api?.configured || !user?.emailVerified) {
+      setStatus("Autentifică-te și confirmă emailul pentru a confirma participarea.", "error");
       return;
     }
     button.disabled = true;
+    const attendanceRef = api.db.ref(`eventAttendance/${event.databaseEventId || event.id}/${user.uid}`);
     try {
-      const participantRef = window.FomoFirebase.db.ref(`eventParticipants/${event.firebaseEventId}/${user.uid}`);
-      const existingParticipation = await participantRef.once("value");
-      if (!existingParticipation.exists()) await participantRef.set(true);
-
-      try {
-        const result = await window.FomoGamification.awardXp("event_joined", event.firebaseEventId);
-        button.textContent = "Participi · +30 XP";
-        button.disabled = true;
-        setStatus(
-          result.xpAwarded ? "Te-ai alăturat evenimentului și ai primit 30 XP." : "Participarea ta era deja înregistrată.",
-          "success",
-        );
-      } catch (xpError) {
-        button.disabled = false;
-        button.textContent = "Reîncearcă XP · +30";
-        console.error("Event participation succeeded, but XP could not be awarded.", xpError);
-        setStatus(`Participarea a fost salvată, dar XP nu a putut fi acordat: ${xpError.message}`, "error");
+      if (event.goingByMe) {
+        await attendanceRef.remove();
+        setStatus("Nu mai participi la acest eveniment.", "success");
+        return;
+      }
+      await attendanceRef.set(firebase.database.ServerValue.TIMESTAMP);
+      if (event.source === "community" && event.status === "approved") {
+        try {
+          const result = await window.FomoGamification.awardXp("event_joined", event.databaseEventId || event.id);
+          setStatus(
+            result.xpAwarded ? "Participarea a fost salvată și ai primit 30 XP." : "Participarea a fost salvată; XP-ul pentru acest eveniment fusese deja acordat.",
+            "success",
+          );
+        } catch (xpError) {
+          console.error("Event participation succeeded, but XP could not be awarded.", xpError);
+          setStatus(`Participarea a fost salvată, dar XP nu a putut fi acordat: ${xpError.message}`, "error");
+        }
+      } else {
+        setStatus("Participarea ta a fost salvată.", "success");
       }
     } catch (error) {
+      setStatus(`Nu am putut actualiza participarea: ${error.message}`, "error");
+    } finally {
       button.disabled = false;
-      setStatus(`Nu te-ai putut alătura evenimentului: ${error.message}`, "error");
     }
   });
   return button;
 }
 
+function createEventTravelActions(event, onRoute) {
+  const routeButton = createElement("button", "event-route-button", "Cum ajung? ↗");
+  routeButton.type = "button";
+  routeButton.addEventListener("click", async (clickEvent) => {
+    clickEvent.stopPropagation();
+    onRoute?.();
+    await window.FomoRoutePlanner.showRoute(event);
+  });
+
+  const transitButton = createElement("button", "event-route-button transit-route-button", "Transport public ↗");
+  transitButton.type = "button";
+  transitButton.addEventListener("click", (clickEvent) => {
+    clickEvent.stopPropagation();
+    onRoute?.();
+    window.FomoRoutePlanner.showRoute(event, "TRANSIT");
+  });
+
+  const rideActions = window.FomoRideSharing.createActions(event);
+  rideActions.addEventListener("click", (clickEvent) => clickEvent.stopPropagation());
+  return [routeButton, transitButton, rideActions];
+}
+
+/* ==================== MARKERE ==================== */
 function createEventMarker(event) {
+  const markerCount = event.source === "community" ? attendanceCountLabel(event) : "…";
   const markerIcon = L.divIcon({
     className: "",
-    html: `<div class="event-map-marker-wrap"><div class="event-map-marker${event.tier === "paid" ? " promoted" : ""}"><span>${event.votes}</span></div></div>`,
+    html: `<div class="event-map-marker-wrap"><div class="event-map-marker${event.tier === "paid" ? " promoted" : ""}"><span>${markerCount}</span></div></div>`,
     iconSize: [36, 42],
     iconAnchor: [18, 39],
   });
@@ -260,12 +341,27 @@ function createEventMarker(event) {
   const title = createElement("strong", "", event.title);
   const venue = createElement("span", "", event.venue);
   popup.append(title, venue);
+  popup.append(createElement(
+    "span",
+    "map-popup-description",
+    `${formatEventTimeRange(event)} · Bilet: ${formatTicketPrice(event)}`,
+  ));
+  popup.append(createAttendanceButton(event));
+  const ticketLink = createTicketLink(event);
+  if (ticketLink) popup.append(ticketLink);
+  if (event.status === "pending") {
+    popup.append(createElement("span", "map-popup-description", "În verificare de către owner sau admin."));
+  }
   if (event.description) {
     popup.append(createElement("span", "map-popup-description", event.description));
   }
-  const participationButton = createEventParticipationButton(event);
-  if (participationButton) popup.append(participationButton);
-  popup.append(createElement("span", "popup-action", "Vezi evenimentul →"));
+  const viewButton = createElement("button", "event-route-button popup-action", "Vezi evenimentul →");
+  viewButton.type = "button";
+  viewButton.addEventListener("click", (clickEvent) => {
+    clickEvent.stopPropagation();
+    window.dispatchEvent(new CustomEvent("fomo-view-event", { detail: { eventId: event.id } }));
+  });
+  popup.append(viewButton, ...createEventTravelActions(event, () => selectEvent(event.id, false)));
   marker.bindPopup(popup);
   marker.on("click", () => selectEvent(event.id, false));
   return marker;
@@ -279,19 +375,29 @@ function createLocationPopup(location) {
     createElement("span", "", location.category),
   );
   const upcomingEvents = events
-    .filter((event) => event.source === "community" && event.locationId === location.id)
+    .filter((event) => event.source === "community" && event.locationId === location.id && !eventHasEnded(event))
     .sort((left, right) => new Date(left.startsAt) - new Date(right.startsAt));
   for (const event of upcomingEvents) {
     popup.append(
       createElement("strong", "map-popup-event-title", event.title),
-      createElement("span", "", formatEventDate(event.startsAt)),
+      createElement("span", "", formatEventTimeRange(event)),
+      createElement("span", "", `Bilet: ${formatTicketPrice(event)}`),
+      createElement("span", "", event.attendanceLoaded
+        ? `${attendanceCountLabel(event)} persoane merg`
+        : event.attendanceError
+          ? "Numărul real de participanți nu este disponibil."
+          : "Se încarcă numărul real de participanți…"),
+      createElement("span", "", event.status === "pending" ? "În verificare" : "Verificat"),
     );
     if (event.description) {
       popup.append(createElement("span", "map-popup-description", event.description));
     }
+    popup.append(createAttendanceButton(event));
+    const ticketLink = createTicketLink(event);
+    if (ticketLink) popup.append(ticketLink);
   }
   if (!upcomingEvents.length) {
-    popup.append(createElement("span", "map-popup-description", "Nu există evenimente verificate la această locație."));
+    popup.append(createElement("span", "map-popup-description", "Nu există evenimente trimise la această locație."));
   }
   const routeDestination = {
     id: location.id,
@@ -300,21 +406,7 @@ function createLocationPopup(location) {
     latitude: Number(location.latitude),
     longitude: Number(location.longitude),
   };
-  const routeButton = createElement("button", "event-route-button", "Cum ajung? ↗");
-  routeButton.type = "button";
-  routeButton.addEventListener("click", (clickEvent) => {
-    clickEvent.stopPropagation();
-    window.FomoRoutePlanner.showRoute(routeDestination);
-  });
-  const transitButton = createElement("button", "event-route-button transit-route-button", "Transport public ↗");
-  transitButton.type = "button";
-  transitButton.addEventListener("click", (clickEvent) => {
-    clickEvent.stopPropagation();
-    window.FomoRoutePlanner.showRoute(routeDestination, "TRANSIT");
-  });
-  const rideActions = window.FomoRideSharing.createActions(routeDestination);
-  rideActions.addEventListener("click", (clickEvent) => clickEvent.stopPropagation());
-  popup.append(routeButton, transitButton, rideActions);
+  popup.append(...createEventTravelActions(routeDestination));
   return popup;
 }
 
@@ -370,6 +462,7 @@ function getLocationCategoryIcon(category) {
 }
 
 function setMapLocations(locations) {
+  mapLocationsById = new Map(locations.map((location) => [location.id, location]));
   locationLayer.clearLayers();
   const validLocations = locations.filter((location) =>
     Number.isFinite(Number(location.latitude)) &&
@@ -434,11 +527,14 @@ function createEventCard(event) {
   if (event.id === selectedEventId) card.classList.add("selected");
 
   const heading = createElement("div", "event-card-heading");
-  const category = createElement("span", "event-category", event.category);
+  const category = createElement("span", "event-category", eventCategoryLabel(event.category));
+  const tierClass = event.tier === "paid" ? "promoted"
+    : event.status === "pending" ? "unverified"
+      : "";
   const tier = createElement(
     "span",
-    `event-tier${event.tier === "paid" ? " promoted" : ""}`,
-    event.tier === "paid" ? "Promovat" : "Comunitate",
+    `event-tier${tierClass ? ` ${tierClass}` : ""}`,
+    event.tier === "paid" ? "Promovat" : event.status === "pending" ? "În verificare" : "Comunitate",
   );
   heading.append(category, tier);
 
@@ -446,11 +542,15 @@ function createEventCard(event) {
   const description = createElement("p", "event-description", event.description);
   const details = createElement("div", "event-details");
   details.append(
-    createElement("span", "", `${formatEventDate(event.startsAt)}`),
+    createElement("span", "", formatEventTimeRange(event)),
     createElement("span", "", event.venue),
+    createElement("span", "", `Bilet: ${formatTicketPrice(event)}`),
   );
 
   const actions = createElement("div", "event-actions");
+  actions.append(createAttendanceButton(event));
+  const ticketLink = createTicketLink(event);
+  if (ticketLink) actions.append(ticketLink);
   const voteButton = createElement("button", `vote-button${event.votedByMe ? " voted" : ""}`);
   voteButton.type = "button";
   voteButton.setAttribute("aria-pressed", String(Boolean(event.votedByMe)));
@@ -480,51 +580,58 @@ function createEventCard(event) {
     }
   });
 
-  const routeButton = createElement("button", "event-route-button", "Cum ajung? ↗");
-  routeButton.type = "button";
-  routeButton.addEventListener("click", async (clickEvent) => {
-    clickEvent.stopPropagation();
-    selectEvent(event.id, false);
-    await window.FomoRoutePlanner.showRoute(event);
-  });
-  const transitButton = createElement("button", "event-route-button transit-route-button", "Transport public ↗");
-  transitButton.type = "button";
-  transitButton.addEventListener("click", (clickEvent) => {
-    clickEvent.stopPropagation();
-    selectEvent(event.id, false);
-    window.FomoRoutePlanner.showRoute(event, "TRANSIT");
-  });
-  const rideActions = window.FomoRideSharing.createActions(event);
-  rideActions.addEventListener("click", (clickEvent) => clickEvent.stopPropagation());
+  const travelActions = createEventTravelActions(event, () => selectEvent(event.id, false));
   if (event.source !== "community") actions.append(voteButton);
-  const participationButton = createEventParticipationButton(event);
-  if (participationButton) actions.append(participationButton);
-  actions.append(routeButton, transitButton, rideActions);
+  actions.append(...travelActions);
   card.append(heading, title, description, details, actions);
   card.addEventListener("click", () => selectEvent(event.id, true));
   return card;
 }
 
 function renderEvents() {
-  events.sort((left, right) => right.votes - left.votes || left.title.localeCompare(right.title, "ro"));
+  const visibleEvents = getFilteredEvents(events);
   eventList.replaceChildren();
-  eventCount.textContent = String(events.length);
-  if (events.length === 0) {
-    eventList.append(createElement("p", "loading-events", "Nu sunt evenimente disponibile momentan."));
+  eventCount.textContent = String(visibleEvents.length);
+  for (const [id, marker] of eventMarkers) {
+    const event = events.find((item) => item.id === id);
+    if (!event) continue;
+    if (visibleEvents.includes(event)) {
+      if (!map.hasLayer(marker)) marker.addTo(map);
+    } else if (map.hasLayer(marker)) {
+      map.removeLayer(marker);
+    }
+  }
+  if (visibleEvents.length === 0) {
+    eventList.append(createElement("p", "loading-events", "Nu există evenimente pentru filtrele alese."));
     return;
   }
-  for (const event of events) eventList.append(createEventCard(event));
+  for (const event of visibleEvents) eventList.append(createEventCard(event));
 
   for (const [id, marker] of eventMarkers) {
     const event = events.find((item) => item.id === id);
     if (!event) continue;
     marker.setIcon(L.divIcon({
       className: "",
-      html: `<div class="event-map-marker-wrap"><div class="event-map-marker${event.id === selectedEventId ? " active" : ""}${event.tier === "paid" ? " promoted" : ""}"><span>${event.votes}</span></div></div>`,
+      html: `<div class="event-map-marker-wrap"><div class="event-map-marker${event.id === selectedEventId ? " active" : ""}${event.tier === "paid" ? " promoted" : ""}"><span>${event.source === "community" ? attendanceCountLabel(event) : "…"}</span></div></div>`,
       iconSize: [36, 42],
       iconAnchor: [18, 39],
     }));
   }
+}
+
+function pruneExpiredEvents() {
+  const activeEvents = events.filter((event) => !eventHasEnded(event));
+  if (activeEvents.length === events.length) return;
+  const activeIds = new Set(activeEvents.map((event) => event.id));
+  for (const [id, marker] of eventMarkers) {
+    if (activeIds.has(id)) continue;
+    if (map.hasLayer(marker)) map.removeLayer(marker);
+    eventMarkers.delete(id);
+    if (selectedEventId === id) selectedEventId = null;
+  }
+  map.closePopup();
+  events = activeEvents;
+  renderEvents();
 }
 
 function selectEvent(eventId, openPopup) {
@@ -572,38 +679,82 @@ function recordPlaceVisit(event) {
 window.FomoSearch = {
   search(query, category = "all") {
     const normalizedQuery = query.trim().toLocaleLowerCase("ro");
-    return events.filter((event) =>
-      (category === "all" || matchesEventCategory(event.category, category)) &&
-      (!normalizedQuery || [event.title, event.venue, event.category, event.description]
-        .some((value) => String(value || "").toLocaleLowerCase("ro").includes(normalizedQuery)))
-    );
+    const filtered = getFilteredEvents(events, { ...eventFilters, category })
+      .filter((event) => !normalizedQuery || [event.title, event.venue, event.category, event.description]
+        .some((value) => String(value || "").toLocaleLowerCase("ro").includes(normalizedQuery)));
+    return filtered;
   },
   select(eventId) {
     selectEvent(eventId, true);
   },
 };
 
+function getFilteredEvents(sourceEvents, filters = eventFilters) {
+  const filtered = sourceEvents.filter((event) =>
+    !eventHasEnded(event) &&
+    (showPromotedEvents || event.tier !== "paid") &&
+    (filters.category === "all" || matchesEventCategory(event.category, filters.category)) &&
+    (filters.venueType === "all" ||
+      String(event.venueType || mapLocationsById.get(event.locationId)?.category || "").toLocaleLowerCase("ro") === filters.venueType)
+  );
+  const sorters = {
+    popular: (left, right) => Number(right.attendeesCount || 0) - Number(left.attendeesCount || 0),
+    soonest: (left, right) => new Date(left.startsAt) - new Date(right.startsAt),
+    cheapest: (left, right) => Number(left.ticketPriceCents || 0) - Number(right.ticketPriceCents || 0),
+  };
+  filtered.sort((sorters[filters.sort] || sorters.popular) ||
+    ((left, right) => left.title.localeCompare(right.title, "ro")));
+  return filtered;
+}
+
 function matchesEventCategory(category, filter) {
   const normalizedCategory = String(category || "").toLocaleLowerCase("ro");
   const categoryTerms = {
-    restaurants: ["food", "drink", "restaurant", "culinar", "gastronom"],
-    music: ["muzic", "music", "concert", "dj"],
-    meetups: ["social", "întâln", "intaln", "meetup", "network"],
-    outdoor: ["outdoor", "alerg", "sport", "drume", "natur"],
-    film: ["film", "cinema", "proiec"],
+    socializing: ["social", "socializare", "întâln", "intaln", "meetup", "network"],
+    workshops: ["atelier", "workshop", "curs", "training"],
+    charity: ["caritate", "charity", "voluntar", "fundraising"],
+    exhibitions: ["expozi", "exhibi", "artă", "arta", "pictur", "painting", "galerie"],
+    sports: ["sport", "alerg", "drume", "fitness", "yoga"],
+    healthcare: ["sănăt", "sanat", "health", "wellbeing", "medical"],
+    entertainment: ["entertainment", "divertisment", "muzic", "music", "concert", "dj", "film", "cinema", "food", "drink", "restaurant"],
   };
-  if (filter === "other") {
-    return !Object.values(categoryTerms).some((terms) =>
-      terms.some((term) => normalizedCategory.includes(term))
-    );
-  }
   return (categoryTerms[filter] || []).some((term) => normalizedCategory.includes(term));
 }
+
+window.FomoSetEventFilters = (filters) => {
+  eventFilters = { ...eventFilters, ...filters };
+  renderEvents();
+};
+
+window.FomoSetPromotedVisibility = (showPromoted) => {
+  showPromotedEvents = showPromoted;
+  renderEvents();
+};
+
+window.FomoSetEventLocations = (locations) => {
+  setMapLocations(locations);
+  const venueSelect = document.querySelector("#venue-type-select");
+  if (!venueSelect) return;
+  const selectedValue = venueSelect.value;
+  const venueTypes = [...new Set(locations
+    .map((location) => String(location.category || "").trim())
+    .filter(Boolean))].sort((left, right) => left.localeCompare(right, "ro"));
+  venueSelect.replaceChildren(createElement("option", "", "Toate locațiile"));
+  venueSelect.options[0].value = "all";
+  venueTypes.forEach((venueType) => {
+    const option = createElement("option", "", venueType);
+    option.value = venueType.toLocaleLowerCase("ro");
+    venueSelect.append(option);
+  });
+  if ([...venueSelect.options].some((option) => option.value === selectedValue)) {
+    venueSelect.value = selectedValue;
+  }
+};
 
 async function loadEvents() {
   const data = await apiRequest(`/api/events?voterId=${encodeURIComponent(voterId)}`);
   const communityEvents = events.filter((event) => event.source === "community");
-  events = data.events.concat(communityEvents);
+  events = data.events.concat(communityEvents).filter((event) => !eventHasEnded(event));
   for (const marker of eventMarkers.values()) map.removeLayer(marker);
   eventMarkers = new Map(events.map((event) => [event.id, createEventMarker(event)]));
   renderEvents();
@@ -786,13 +937,15 @@ window.FomoRouteContext = {
 };
 
 window.FomoRefreshCommunityEvents = (communityEvents) => {
-  events = events.filter((event) => event.source !== "community").concat(communityEvents);
+  events = events.filter((event) => event.source !== "community")
+    .concat(communityEvents.filter((event) => !eventHasEnded(event)));
   for (const marker of eventMarkers.values()) map.removeLayer(marker);
   eventMarkers = new Map(events.map((event) => [event.id, createEventMarker(event)]));
   renderEvents();
 };
 
 window.FomoSetLocations = setMapLocations;
+window.setInterval(pruneExpiredEvents, 30_000);
 
 async function initialize() {
   try {

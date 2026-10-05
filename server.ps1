@@ -234,8 +234,9 @@ function Add-XpToUser {
     }
     "event_joined" {
       $action = Invoke-FirebaseRestRequest -Method "GET" -Path "communityEvents/$ActionId" -AccessToken $script:firebaseDatabaseAdminToken
-      $participant = Invoke-FirebaseRestRequest -Method "GET" -Path "eventParticipants/$ActionId/$UserId" -AccessToken $script:firebaseDatabaseAdminToken
-      $actionIsValid = $null -ne $action.Value -and [string]$action.Value.status -eq "approved" -and $participant.Value -eq $true
+      $attendance = Invoke-FirebaseRestRequest -Method "GET" -Path "eventAttendance/$ActionId/$UserId" -AccessToken $script:firebaseDatabaseAdminToken
+      $hasAttendanceTimestamp = $null -ne $attendance.Value -and [string]$attendance.Value -match '^\d+$' -and [double]$attendance.Value -gt 0
+      $actionIsValid = $null -ne $action.Value -and [string]$action.Value.status -eq "approved" -and $hasAttendanceTimestamp
     }
     "friend_connected" {
       $friend = Invoke-FirebaseRestRequest -Method "GET" -Path "friends/$UserId/$ActionId" -AccessToken $script:firebaseDatabaseAdminToken

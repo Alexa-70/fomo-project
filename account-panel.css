@@ -3,6 +3,30 @@
   font-size: 20px;
 }
 
+.account-admin-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-notification-badge {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #e85151;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.account-notification-badge[hidden] {
+  display: none;
+}
+
 .account-panel [hidden] {
   display: none !important;
 }
