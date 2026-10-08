@@ -19,7 +19,7 @@
 <link rel="stylesheet" href="./event-workflow.css?v=warm-palette-v1" />
 
 <!-- UI Butoane și Autentificare (versiunea actualizată din main) -->
-<link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=profile-firebase-auth-v2" />
+<link rel="stylesheet" href="./buttons-ui/buttons-ui.css?v=navigation-pin-orange-v1" />
 
 <!-- Stiluri adiționale unice din main care trebuie păstrate -->
 <link rel="stylesheet" href="./styles.css?v=floating-v1" />
@@ -154,7 +154,6 @@
           <p class="eyebrow">Localuri și evenimente</p>
           <h2 id="search-heading">Caută pe hartă</h2>
         </div>
-        <button class="profile-close-button" id="search-close-button" type="button" aria-label="Închide căutarea">×</button>
       </div>
       <label class="search-label" for="event-search-input">Nume, local sau categorie</label>
       <input class="search-input" id="event-search-input" type="search" placeholder="ex. muzică live" autocomplete="off" />
@@ -171,14 +170,41 @@
       <ul class="search-results" id="search-results" aria-label="Rezultate căutării"></ul>
     </aside>
 
-    <aside class="profile-panel account-profile-page" id="profile-panel" aria-labelledby="profile-heading" hidden>
+    <aside class="profile-panel account-profile-page" id="profile-panel" aria-label="Profilul tău" hidden>
       <header class="profile-page-header">
         <div>
-          <p class="eyebrow">Comunitatea FOMO</p>
-          <h1 id="profile-heading">Profilul meu</h1>
+          <p class="eyebrow">FOMO</p>
         </div>
-        <button class="profile-close-button" id="profile-close-button" type="button" aria-label="Înapoi la hartă">×</button>
       </header>
+
+      <section class="profile-hero" aria-label="Profilul tău">
+        <div class="profile-avatar" aria-hidden="true">
+          <svg viewBox="0 0 64 64"><circle cx="32" cy="23" r="11" /><path d="M12 57c1.5-12 9-19 20-19s18.5 7 20 19" /></svg>
+        </div>
+        <h2 class="profile-username" id="profile-username">Explorator</h2>
+        <form class="profile-name-editor" id="profile-name-editor" hidden>
+          <label class="visually-hidden" for="profile-name-input">Numele tău</label>
+          <input id="profile-name-input" maxlength="32" autocomplete="nickname" placeholder="Numele tău" />
+          <button type="submit">Salvează</button>
+          <button type="button" id="profile-name-cancel">Anulează</button>
+        </form>
+        <button class="profile-edit-name" id="profile-edit-name" type="button">Editează numele</button>
+        <p class="profile-account-note" id="profile-account-note">Profil local · date păstrate în acest browser</p>
+        <section class="profile-section" aria-labelledby="profile-badges-heading">
+          <div class="profile-section-heading">
+            <div>
+              <p class="eyebrow">Progresul tău</p>
+              <h2 id="profile-badges-heading">Insigne</h2>
+            </div>
+          </div>
+          <div class="profile-badges" id="profile-badges" aria-live="polite"></div>
+        </section>
+        <section class="profile-section" aria-labelledby="profile-places-heading">
+          <h2 class="profile-places-title" id="profile-places-heading">your worst fomo...</h2>
+          <p class="profile-places-note">Bazat pe locațiile deschise de tine pe hartă, pe acest dispozitiv.</p>
+          <ol class="profile-places-list" id="profile-places-list"></ol>
+        </section>
+      </section>
 
       <section class="profile-auth-panel" aria-labelledby="profile-auth-heading">
         <div class="profile-section-heading">
@@ -218,71 +244,38 @@
           </label>
           <button class="profile-auth-submit" type="submit">Creează cont</button>
         </form>
-        <div class="profile-auth-account" id="profile-auth-account" hidden>
-          <p id="profile-auth-email"></p>
-          <button class="profile-auth-verify" id="profile-resend-verification" type="button" hidden>Retrimite emailul de confirmare</button>
-          <button class="profile-auth-submit" id="profile-signout" type="button">Deconectează-te</button>
-        </div>
-        <p class="profile-auth-status" id="profile-auth-status" role="status" aria-live="polite"></p>
       </section>
+      <p class="profile-auth-status" id="profile-auth-status" role="status" aria-live="polite"></p>
 
-      <section class="profile-hero" aria-label="Profilul tău">
-        <div class="profile-avatar" aria-hidden="true">
-          <svg viewBox="0 0 64 64"><circle cx="32" cy="23" r="11" /><path d="M12 57c1.5-12 9-19 20-19s18.5 7 20 19" /></svg>
-        </div>
-        <h2 class="profile-username" id="profile-username">Explorator</h2>
-        <form class="profile-name-editor" id="profile-name-editor" hidden>
-          <label class="visually-hidden" for="profile-name-input">Numele tău</label>
-          <input id="profile-name-input" maxlength="32" autocomplete="nickname" placeholder="Numele tău" />
-          <button type="submit">Salvează</button>
-          <button type="button" id="profile-name-cancel">Anulează</button>
-        </form>
-        <button class="profile-edit-name" id="profile-edit-name" type="button">Editează numele</button>
-        <p class="profile-account-note" id="profile-account-note">Profil local · date păstrate în acest browser</p>
-      </section>
+      <button class="profile-signout-button" id="profile-signout" type="button" hidden>Deconectează-te</button>
 
-      <section class="profile-section" aria-labelledby="profile-badges-heading">
-        <div class="profile-section-heading">
-          <div>
-            <p class="eyebrow">Progresul tău</p>
-            <h2 id="profile-badges-heading">Insigne</h2>
-          </div>
-        </div>
-        <div class="profile-badges" id="profile-badges" aria-live="polite"></div>
-      </section>
-
-      <section class="profile-section" aria-labelledby="profile-places-heading">
-        <div class="profile-section-heading">
-          <div>
-            <p class="eyebrow">Descoperirile tale</p>
-            <h2 id="profile-places-heading">Cele mai vizitate locații</h2>
-          </div>
-        </div>
-        <p class="profile-places-note">Bazat pe locațiile deschise de tine pe hartă, pe acest dispozitiv.</p>
-        <ol class="profile-places-list" id="profile-places-list"></ol>
-      </section>
     </aside>
 
-    <aside class="profile-panel friends-panel" id="friends-panel" aria-labelledby="friends-heading" hidden>
-      <header class="profile-page-header">
-        <div>
-          <p class="eyebrow">Comunitatea ta</p>
-          <h1 id="friends-heading">Prieteni</h1>
+    <aside class="profile-panel friends-panel" id="friends-panel" aria-label="Prieteni" hidden>
+      <section class="friends-list-section" aria-labelledby="friends-list-heading">
+        <div class="profile-section-heading">
+          <div>
+            <h2 id="friends-list-heading">your fomoly</h2>
+          </div>
+          <span class="friends-count" id="friends-count">0</span>
         </div>
-        <button class="profile-close-button" id="friends-close-button" type="button" aria-label="Înapoi la hartă">×</button>
-      </header>
+        <ul class="friends-list" id="friends-list"></ul>
+      </section>
       <p class="profile-places-note">Caută username-ul exact al unei persoane înregistrate. Aceasta va primi cererea și trebuie să o accepte.</p>
-      <button class="friends-find-button" id="friends-find-button" type="button" aria-controls="friends-search-form" aria-expanded="false">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3" /><path d="m16 16 4.5 4.5" /><path d="M10.8 7.8v6M7.8 10.8h6" /></svg>
-        Caută prieteni
-      </button>
-      <form class="friends-search-form" id="friends-search-form" hidden>
-        <label class="search-label" for="friends-search-input">Username exact</label>
-        <div class="friends-search-row">
-          <input class="search-input" id="friends-search-input" type="search" maxlength="80" autocomplete="off" placeholder="Username-ul persoanei" />
-          <button class="friends-add-button" type="submit">Caută</button>
-        </div>
-      </form>
+      <div class="friends-search-box" id="friends-search-box">
+        <button class="friends-find-button" id="friends-find-button" type="button" aria-controls="friends-search-form" aria-expanded="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3" /><path d="m16 16 4.5 4.5" /><path d="M10.8 7.8v6M7.8 10.8h6" /></svg>
+          Caută prieteni
+        </button>
+        <form class="friends-search-form" id="friends-search-form" hidden>
+          <label class="visually-hidden" for="friends-search-input">Username-ul exact al prietenului</label>
+          <div class="friends-search-row">
+            <input class="search-input" id="friends-search-input" type="search" maxlength="80" autocomplete="off" placeholder="Introdu username-ul..." />
+            <button class="friends-add-button" type="submit">Caută</button>
+            <button class="friends-search-cancel" id="friends-search-cancel" type="button">Anulează</button>
+          </div>
+        </form>
+      </div>
       <ul class="friends-list friends-search-results" id="friends-search-results"></ul>
       <p class="friends-status" id="friends-status" role="status" aria-live="polite"></p>
       <section class="friends-list-section friends-requests-section" aria-labelledby="friends-requests-heading" hidden>
@@ -294,16 +287,6 @@
           <span class="friends-count" id="friends-requests-count">0</span>
         </div>
         <ul class="friends-list" id="friends-requests-list"></ul>
-      </section>
-      <section class="friends-list-section" aria-labelledby="friends-list-heading">
-        <div class="profile-section-heading">
-          <div>
-            <p class="eyebrow">Oamenii tăi</p>
-            <h2 id="friends-list-heading">Lista de prieteni</h2>
-          </div>
-          <span class="friends-count" id="friends-count">0</span>
-        </div>
-        <ul class="friends-list" id="friends-list"></ul>
       </section>
     </aside>
 
@@ -322,7 +305,7 @@
     <script src="./account-panel.js?v=profile-repair-v1"></script>
     <script src="./route-planner.js?v=github-pages-routing-v1"></script>
     <script src="./ride-sharing.js?v=ridesharing-v1"></script>
-    <script src="./buttons-ui/buttons-ui.js?v=firebase-friends-v5"></script>
+    <script src="./buttons-ui/buttons-ui.js?v=navigation-surface-colors-v1"></script>
     <script src="./ai-assistant.js"></script>
   </body>
 </html>

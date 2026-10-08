@@ -7,7 +7,9 @@
   const floatingPanel = document.querySelector("#floating-panel");
   const friendsPanel = document.querySelector("#friends-panel");
   const friendsFindButton = document.querySelector("#friends-find-button");
+  const friendsSearchBox = document.querySelector("#friends-search-box");
   const friendsSearchForm = document.querySelector("#friends-search-form");
+  const friendsSearchCancel = document.querySelector("#friends-search-cancel");
   const friendsSearchInput = document.querySelector("#friends-search-input");
   const friendsSearchResults = document.querySelector("#friends-search-results");
   const friendsStatus = document.querySelector("#friends-status");
@@ -19,9 +21,6 @@
   const friendsCountBadge = document.querySelector("#friends-count-badge");
   const searchPanel = document.querySelector("#search-panel");
   const profilePanel = document.querySelector("#profile-panel");
-  const profileCloseButton = document.querySelector("#profile-close-button");
-  const friendsCloseButton = document.querySelector("#friends-close-button");
-  const searchCloseButton = document.querySelector("#search-close-button");
   const searchInput = document.querySelector("#event-search-input");
   const searchFilters = document.querySelector("#search-filters");
   const searchResults = document.querySelector("#search-results");
@@ -36,10 +35,8 @@
   const profileSignupTab = document.querySelector("#profile-signup-tab");
   const profileLoginForm = document.querySelector("#profile-login-form");
   const profileSignupForm = document.querySelector("#profile-signup-form");
-  const profileAuthAccount = document.querySelector("#profile-auth-account");
-  const profileAuthEmail = document.querySelector("#profile-auth-email");
+  const profileAuthPanel = document.querySelector(".profile-auth-panel");
   const profileAuthStatus = document.querySelector("#profile-auth-status");
-  const profileResendVerification = document.querySelector("#profile-resend-verification");
   const profileResetPassword = document.querySelector("#profile-reset-password");
   const profileSignout = document.querySelector("#profile-signout");
   const profileBadges = document.querySelector("#profile-badges");
@@ -55,7 +52,50 @@
   let friendSubscriptionUid = null;
   let activeSearchCategory = "all";
 
+  function getBackgroundColor(element) {
+    const values = getComputedStyle(element).backgroundColor.match(/[\d.]+/g);
+    if (!values || values.length < 3) return null;
+    return {
+      red: Number(values[0]),
+      green: Number(values[1]),
+      blue: Number(values[2]),
+      alpha: values.length > 3 ? Number(values[3]) : 1,
+    };
+  }
+
+  function updateNavigationSurfaceTheme(view) {
+    const surface = view === "features" ? floatingPanel
+      : view === "friends" ? friendsPanel
+        : view === "search" ? searchPanel
+          : view === "profile" ? profilePanel
+            : document.querySelector("#map");
+    const foreground = getBackgroundColor(surface);
+    const base = getBackgroundColor(document.body) || { red: 255, green: 253, blue: 250, alpha: 1 };
+    const alpha = foreground ? foreground.alpha : 0;
+    const color = foreground
+      ? {
+        red: foreground.red * alpha + base.red * (1 - alpha),
+        green: foreground.green * alpha + base.green * (1 - alpha),
+        blue: foreground.blue * alpha + base.blue * (1 - alpha),
+      }
+      : base;
+    const luminance = (0.2126 * color.red + 0.7152 * color.green + 0.0722 * color.blue) / 255;
+
+    document.body.dataset.navigationSurface = luminance < 0.5 ? "dark" : "light";
+  }
+
+  function closeFriendsSearch() {
+    friendsSearchBox.classList.remove("is-expanded");
+    friendsFindButton.hidden = false;
+    friendsFindButton.setAttribute("aria-expanded", "false");
+    friendsSearchForm.hidden = true;
+    friendsSearchInput.value = "";
+    friendsStatus.textContent = "";
+    friendsSearchResults.replaceChildren();
+  }
+
   function setNavigationView(view) {
+    updateNavigationSurfaceTheme(view);
     const featuresOpen = view === "features";
     const friendsOpen = view === "friends";
     const searchOpen = view === "search";
@@ -88,6 +128,8 @@
       window.setTimeout(() => window.FomoRouteContext.map.invalidateSize(), 50);
     }
   }
+
+  updateNavigationSurfaceTheme("home");
 
   function renderSearchResults() {
     searchResults.replaceChildren();
@@ -434,10 +476,11 @@
   async function renderProfileAccount(user) {
     const api = window.FomoFirebase;
     if (!api || !api.configured) {
+      profileAuthPanel.hidden = false;
       profileAuthSwitch.hidden = true;
       profileLoginForm.hidden = true;
       profileSignupForm.hidden = true;
-      profileAuthAccount.hidden = true;
+      profileSignout.hidden = true;
       profileEditName.hidden = true;
       setProfileAuthStatus(
         api && api.error
@@ -449,8 +492,9 @@
     }
 
     if (!user) {
+      profileAuthPanel.hidden = false;
       profileAuthSwitch.hidden = false;
-      profileAuthAccount.hidden = true;
+      profileSignout.hidden = true;
       profileEditName.hidden = false;
       profileAccountNote.textContent = "Profil local · autentifică-te pentru sincronizarea contului.";
       profileUsername.textContent = readStoredValue(profileNameKey, "Explorator");
@@ -458,18 +502,16 @@
       return;
     }
 
+    profileAuthPanel.hidden = true;
     profileAuthSwitch.hidden = true;
     profileLoginForm.hidden = true;
     profileSignupForm.hidden = true;
-    profileAuthAccount.hidden = false;
+    profileSignout.hidden = false;
     profileEditName.hidden = true;
     profileNameEditor.hidden = true;
-    profileAuthEmail.textContent = `${user.email || ""}${user.emailVerified ? " · email confirmat" : " · email neconfirmat"}`;
-    profileResendVerification.hidden = user.emailVerified;
-    profileAccountNote.textContent = "Cont conectat prin Firebase Authentication.";
+    profileAccountNote.textContent = user.email || "Cont conectat prin Firebase Authentication.";
     profileUsername.textContent = user.displayName || user.email || "Utilizator";
     setProfileAuthStatus("");
-    profileAuthEmail.textContent = `${user.email || ""}${user.emailVerified ? " · email confirmat" : " · email neconfirmat"}`;
     return true;
   }
 
@@ -608,16 +650,14 @@
     }
   });
   friendsFindButton.addEventListener("click", () => {
-    const isExpanded = friendsFindButton.getAttribute("aria-expanded") === "true";
-    friendsFindButton.setAttribute("aria-expanded", String(!isExpanded));
-    friendsSearchForm.hidden = isExpanded;
-    if (isExpanded) {
-      friendsSearchInput.value = "";
-      friendsStatus.textContent = "";
-      friendsSearchResults.replaceChildren();
-    } else {
-      friendsSearchInput.focus();
-    }
+    friendsSearchBox.classList.add("is-expanded");
+    friendsFindButton.hidden = true;
+    friendsFindButton.setAttribute("aria-expanded", "true");
+    friendsSearchForm.hidden = false;
+    friendsSearchInput.focus();
+  });
+  friendsSearchCancel.addEventListener("click", () => {
+    closeFriendsSearch();
   });
   friendsSearchForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -756,15 +796,6 @@
       setProfileAuthStatus(`Nu am putut trimite linkul de resetare: ${error.message}`, "error");
     }
   });
-  profileResendVerification.addEventListener("click", async () => {
-    try {
-      await window.FomoFirebase.user().sendEmailVerification();
-      setProfileAuthStatus("Emailul de confirmare a fost retrimis.", "success");
-    } catch (error) {
-      console.error("Firebase verification email failed.", error);
-      setProfileAuthStatus(`Nu am putut retrimite emailul: ${error.message}`, "error");
-    }
-  });
   profileSignout.addEventListener("click", async () => {
     try {
       await window.FomoFirebase.auth.signOut();
@@ -816,10 +847,12 @@
   document.querySelector("#profile-name-cancel").addEventListener("click", () => {
     profileNameEditor.hidden = true;
   });
-  profileCloseButton.addEventListener("click", () => setNavigationView("home"));
-  friendsCloseButton.addEventListener("click", () => setNavigationView("home"));
-  searchCloseButton.addEventListener("click", () => setNavigationView("home"));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") setNavigationView("home");
+  });
+  document.addEventListener("click", (event) => {
+    if (!friendsSearchForm.hidden && !friendsSearchBox.contains(event.target)) {
+      closeFriendsSearch();
+    }
   });
 })();
